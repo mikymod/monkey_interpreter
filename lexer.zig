@@ -20,13 +20,14 @@ pub const Lexer = struct {
     }
 
     ///
-    pub fn readIdentifier(self: *Lexer) []const u8 {
-        var pos = self.position;
+    pub fn readIdentifier(self: *Lexer, ident: []u8) usize {
+        const pos = self.position;
         while (isLetter(self.ch)) {
-            pos += 1;
             readChar(self);
         }
-        return self.input[self.position..pos];
+        // ident = self.input[pos..self.position];
+        std.mem.copyForwards(u8, ident, self.input[pos..self.position]);
+        return self.position - pos;
     }
 
     fn isLetter(ch: u8) bool {
@@ -46,8 +47,12 @@ pub const Lexer = struct {
             '}' => token.Token{ .typez = token.RBRACE, .literal = "}" },
             0 => token.Token{ .typez = token.EOF, .literal = "" },
             else => {
+                var ident: [10]u8 = [_]u8{0} ** 10;
                 if (isLetter(self.ch)) {
-                    return token.Token{ .typez = token.IDENT, .literal = readIdentifier(self) };
+                    const len = readIdentifier(self, &ident);
+                    std.debug.print("ident: {s}\n", .{ident[0..len]});
+                    // TODO: type is wrong
+                    return token.Token{ .typez = token.IDENT, .literal = &ident };
                 } else {
                     return token.Token{ .typez = token.ILLEGAL, .literal = "" };
                 }
