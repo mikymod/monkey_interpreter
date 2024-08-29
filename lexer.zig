@@ -22,10 +22,19 @@ pub const Lexer = struct {
     }
 
     ///
+    pub fn peekChar(self: *Lexer) u8 {
+        if (self.read_position >= self.input.len) {
+            return 0;
+        } else {
+            return self.input[self.read_position];
+        }
+    }
+
+    ///
     pub fn readIdentifier(self: *Lexer, ident: []u8) usize {
         const pos = self.position;
         while (isLetter(self.ch)) {
-            readChar(self);
+            self.readChar();
         }
         // ident = self.input[pos..self.position];
         std.mem.copyForwards(u8, ident, self.input[pos..self.position]);
@@ -38,14 +47,14 @@ pub const Lexer = struct {
 
     fn skipWhitespace(self: *Lexer) void {
         while (self.ch == ' ' or self.ch == '\t' or self.ch == '\n' or self.ch == '\r') {
-            readChar(self);
+            self.readChar();
         }
     }
 
     fn readNumber(self: *Lexer, num: []u8) usize {
         const pos = self.position;
         while (isDigit(self.ch)) {
-            readChar(self);
+            self.readChar();
         }
         std.mem.copyForwards(u8, num, self.input[pos..self.position]);
         return self.position - pos;
@@ -59,10 +68,22 @@ pub const Lexer = struct {
     pub fn nextToken(self: *Lexer, allocator: Allocator) !token.Token {
         self.skipWhitespace();
         const tok = switch (self.ch) {
-            '=' => token.Token{ .typez = token.ASSIGN, .literal = "=" },
+            '=' => {
+                if (self.peekChar() == '=') {
+                    self.readChar();
+                    return token.Token{ .typez = token.EQ, .literal = "==" };
+                }
+                return token.Token{ .typez = token.ASSIGN, .literal = "=" };
+            },
             '+' => token.Token{ .typez = token.PLUS, .literal = "+" },
             '-' => token.Token{ .typez = token.MINUS, .literal = "-" },
-            '!' => token.Token{ .typez = token.BANG, .literal = "!" },
+            '!' => {
+                if (self.peekChar() == '=') {
+                    self.readChar();
+                    return token.Token{ .typez = token.NOT_EQ, .literal = "!=" };
+                }
+                return token.Token{ .typez = token.BANG, .literal = "!" };
+            },
             '/' => token.Token{ .typez = token.SLASH, .literal = "/" },
             '*' => token.Token{ .typez = token.ASTERISK, .literal = "*" },
             '<' => token.Token{ .typez = token.LT, .literal = "<" },
@@ -95,7 +116,7 @@ pub const Lexer = struct {
             },
         };
 
-        readChar(self);
+        self.readChar();
         return tok;
     }
 };

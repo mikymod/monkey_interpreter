@@ -119,6 +119,9 @@ test "More operators" {
         \\} else {
         \\  return false;
         \\}
+        \\
+        \\10 == 10;
+        \\10 != 9;
     ;
 
     const tokens = [_]token.Token{
@@ -187,6 +190,14 @@ test "More operators" {
         token.Token{ .typez = token.FALSE, .literal = "false" },
         token.Token{ .typez = token.SEMICOLON, .literal = ";" },
         token.Token{ .typez = token.RBRACE, .literal = "}" },
+        token.Token{ .typez = token.INT, .literal = "10" },
+        token.Token{ .typez = token.EQ, .literal = "==" },
+        token.Token{ .typez = token.INT, .literal = "10" },
+        token.Token{ .typez = token.SEMICOLON, .literal = ";" },
+        token.Token{ .typez = token.INT, .literal = "10" },
+        token.Token{ .typez = token.NOT_EQ, .literal = "!=" },
+        token.Token{ .typez = token.INT, .literal = "9" },
+        token.Token{ .typez = token.SEMICOLON, .literal = ";" },
         token.Token{ .typez = token.EOF, .literal = "" },
     };
 
