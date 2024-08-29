@@ -1,3 +1,5 @@
+const std = @import("std");
+
 pub const Token = struct {
     typez: []const u8,
     literal: []const u8,
@@ -23,6 +25,12 @@ const keywords = [_][]const u8{
     "let",
 };
 
-pub fn lookupIdent(_: []const u8) []const u8 {
-    // TODO
+pub fn lookupIdent(kw: []const u8) []const u8 {
+    if (std.mem.eql(u8, kw, "fn")) {
+        return FUNCTION;
+    } else if (std.mem.eql(u8, kw, "let")) {
+        return LET;
+    }
+
+    return IDENT;
 }
