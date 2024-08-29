@@ -113,6 +113,12 @@ test "More operators" {
         \\let result = add(five, ten);
         \\!-/*5;
         \\5 < 10 > 5;
+        \\
+        \\if (5 < 10) {
+        \\  return true;
+        \\} else {
+        \\  return false;
+        \\}
     ;
 
     const tokens = [_]token.Token{
@@ -164,6 +170,23 @@ test "More operators" {
         token.Token{ .typez = token.GT, .literal = ">" },
         token.Token{ .typez = token.INT, .literal = "5" },
         token.Token{ .typez = token.SEMICOLON, .literal = ";" },
+        token.Token{ .typez = token.IF, .literal = "if" },
+        token.Token{ .typez = token.LPAREN, .literal = "(" },
+        token.Token{ .typez = token.INT, .literal = "5" },
+        token.Token{ .typez = token.LT, .literal = "<" },
+        token.Token{ .typez = token.INT, .literal = "10" },
+        token.Token{ .typez = token.RPAREN, .literal = ")" },
+        token.Token{ .typez = token.LBRACE, .literal = "{" },
+        token.Token{ .typez = token.RETURN, .literal = "return" },
+        token.Token{ .typez = token.TRUE, .literal = "true" },
+        token.Token{ .typez = token.SEMICOLON, .literal = ";" },
+        token.Token{ .typez = token.RBRACE, .literal = "}" },
+        token.Token{ .typez = token.ELSE, .literal = "else" },
+        token.Token{ .typez = token.LBRACE, .literal = "{" },
+        token.Token{ .typez = token.RETURN, .literal = "return" },
+        token.Token{ .typez = token.FALSE, .literal = "false" },
+        token.Token{ .typez = token.SEMICOLON, .literal = ";" },
+        token.Token{ .typez = token.RBRACE, .literal = "}" },
         token.Token{ .typez = token.EOF, .literal = "" },
     };
 
