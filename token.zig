@@ -9,8 +9,16 @@ pub const ILLEGAL = "ILLEGAL";
 pub const EOF = "EOF";
 pub const IDENT = "IDENT";
 pub const INT = "INT";
+
 pub const ASSIGN = "=";
 pub const PLUS = "+";
+pub const MINUS = "-";
+pub const BANG = "!";
+pub const ASTERISK = "*";
+pub const SLASH = "/";
+pub const LT = "<";
+pub const GT = ">";
+
 pub const COMMA = ",";
 pub const SEMICOLON = ";";
 pub const LPAREN = "(";
