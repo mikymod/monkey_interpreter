@@ -36,7 +36,6 @@ pub const Lexer = struct {
         while (isLetter(self.ch)) {
             self.readChar();
         }
-        // ident = self.input[pos..self.position];
         std.mem.copyForwards(u8, ident, self.input[pos..self.position]);
         return self.position - pos;
     }
@@ -68,21 +67,21 @@ pub const Lexer = struct {
     pub fn nextToken(self: *Lexer, allocator: Allocator) !token.Token {
         self.skipWhitespace();
         const tok = switch (self.ch) {
-            '=' => {
+            '=' => blk: {
                 if (self.peekChar() == '=') {
                     self.readChar();
-                    return token.Token{ .typez = token.EQ, .literal = "==" };
+                    break :blk token.Token{ .typez = token.EQ, .literal = "==" };
                 }
-                return token.Token{ .typez = token.ASSIGN, .literal = "=" };
+                break :blk token.Token{ .typez = token.ASSIGN, .literal = "=" };
             },
             '+' => token.Token{ .typez = token.PLUS, .literal = "+" },
             '-' => token.Token{ .typez = token.MINUS, .literal = "-" },
-            '!' => {
+            '!' => blk: {
                 if (self.peekChar() == '=') {
                     self.readChar();
-                    return token.Token{ .typez = token.NOT_EQ, .literal = "!=" };
+                    break :blk token.Token{ .typez = token.NOT_EQ, .literal = "!=" };
                 }
-                return token.Token{ .typez = token.BANG, .literal = "!" };
+                break :blk token.Token{ .typez = token.BANG, .literal = "!" };
             },
             '/' => token.Token{ .typez = token.SLASH, .literal = "/" },
             '*' => token.Token{ .typez = token.ASTERISK, .literal = "*" },
