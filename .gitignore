@@ -1,1 +1,4 @@
 ./zig-out/
+*.exe
+*.exe.obj
+*.pdb

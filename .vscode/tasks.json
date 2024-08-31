@@ -11,6 +11,16 @@
                 "--test-no-exec",
                 "${relativeFile}",
             ]
+        },
+        {
+            "label": "build",
+            "type": "shell",
+            "command": "zig build-exe -O Debug ${fileBasename}",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
         }
     ]
 }

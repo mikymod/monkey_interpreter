@@ -9,6 +9,15 @@
             "args": [],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "test",
+        },
+        {
+            "type": "cppvsdbg",
+            "request": "launch",
+            "name": "Debug",
+            "program": "${workspaceFolder}/${fileBasenameNoExtension}",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "build",
         }
     ]
 }
