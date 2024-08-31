@@ -64,7 +64,7 @@ pub const Lexer = struct {
     }
 
     ///
-    pub fn nextToken(self: *Lexer, allocator: Allocator) !token.Token {
+    pub fn nextToken(self: *Lexer) token.Token {
         self.skipWhitespace();
         const tok = switch (self.ch) {
             '=' => blk: {
@@ -98,16 +98,12 @@ pub const Lexer = struct {
                 var buffer: [10]u8 = [_]u8{0} ** 10;
                 if (isLetter(self.ch)) {
                     const len = readIdentifier(self, &buffer);
-                    const ident = try allocator.alloc(u8, len);
-
-                    std.mem.copyForwards(u8, ident, buffer[0..len]);
-                    std.debug.print("ident: {s}\n", .{ident});
+                    const ident = buffer[0..len];
                     const ident_type = lookupIdent(ident);
                     return token.Token{ .typez = ident_type, .literal = ident };
                 } else if (isDigit(self.ch)) {
                     const len = readNumber(self, &buffer);
-                    const num = try allocator.alloc(u8, len);
-                    std.mem.copyForwards(u8, num, buffer[0..len]);
+                    const num = buffer[0..len];
                     return token.Token{ .typez = token.INT, .literal = num };
                 } else {
                     return token.Token{ .typez = token.ILLEGAL, .literal = "" };

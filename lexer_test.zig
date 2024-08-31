@@ -27,7 +27,7 @@ test "Next token simple input" {
     l.readChar();
 
     for (tokens) |t| {
-        const tok = try l.nextToken(std.testing.allocator);
+        const tok = l.nextToken();
         try expect(std.mem.eql(u8, t.typez, tok.typez));
         try expect(std.mem.eql(u8, t.literal, tok.literal));
         // std.debug.print("t: {s}, tok: {s}\n", .{ t.typez, tok.typez });
@@ -95,7 +95,7 @@ test "Something more complex" {
     l.readChar();
 
     for (tokens) |t| {
-        const tok = try l.nextToken(std.testing.allocator);
+        const tok = l.nextToken();
         try expect(std.mem.eql(u8, t.typez, tok.typez));
         try expect(std.mem.eql(u8, t.literal, tok.literal));
     }
@@ -210,7 +210,7 @@ test "More operators" {
     l.readChar();
 
     for (tokens) |t| {
-        const tok = try l.nextToken(std.testing.allocator);
+        const tok = l.nextToken();
         try expect(std.mem.eql(u8, t.typez, tok.typez));
         try expect(std.mem.eql(u8, t.literal, tok.literal));
         std.debug.print("t: {s}, tok: {s}\n", .{ t.typez, tok.typez });
