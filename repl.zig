@@ -1,6 +1,6 @@
 const std = @import("std");
-const Lexer = @import("lexer.zig").Lexer;
-const token = @import("token.zig");
+const Lexer = @import("lexer/lexer.zig").Lexer;
+const token = @import("lexer/token.zig");
 
 const PROMPT = ">> ";
 
