@@ -5,9 +5,9 @@ const Allocator = std.mem.Allocator;
 
 pub const Lexer = struct {
     input: []const u8,
-    position: usize,
-    read_position: usize,
-    ch: u8,
+    position: usize = 0,
+    read_position: usize = 1,
+    ch: u8 = 0,
 
     ///
     pub fn readChar(self: *Lexer) void {

@@ -4,36 +4,36 @@ const Node = union(enum) {
     statement: Statement,
     expression: Expression,
 
-    pub fn tokenLiteral(_: Node) []const u8 {}
+    pub fn tokenLiteral(_: *Node) []const u8 {}
 };
 
 const Statement = struct {
-    pub fn statementNode(_: Statement) void {}
+    pub fn statementNode(_: *Statement) void {}
 };
 
 const Expression = struct {
-    pub fn expressionNode(_: Expression) void {}
+    pub fn expressionNode(_: *Expression) void {}
+};
+
+const Program = struct {
+    statements: []Statement,
+
+    pub fn tokenLiteral(p: *Program) []const u8 {
+        if (p.statements.len > 0) {
+            return p.statements[0].tokenLiteral();
+        } else {
+            return "";
+        }
+    }
 };
 
 const Identifier = struct {
     token: Token,
     value: []const u8,
 
-    pub fn expressionNode() void {}
-    pub fn tokenLiteral(i: Identifier) []const u8 {
+    pub fn expressionNode(_: *Identifier) void {}
+    pub fn tokenLiteral(i: *Identifier) []const u8 {
         return i.token.literal;
-    }
-};
-
-const Program = struct {
-    statements: []Statement,
-
-    pub fn tokenLiteral(p: Program) []const u8 {
-        if (p.statements.len > 0) {
-            return p.statements[0].tokenLiteral();
-        } else {
-            return "";
-        }
     }
 };
 
@@ -43,7 +43,7 @@ const LetStatement = struct {
     value: Expression,
 
     pub fn statementNode(_: LetStatement) void {}
-    pub fn tokenLiteral(ls: LetStatement) void {
+    pub fn tokenLiteral(ls: LetStatement) []const u8 {
         return ls.token.literal;
     }
 };
