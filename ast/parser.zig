@@ -1,6 +1,7 @@
-const Lexer = @import("../lexer/lexer.zig").Lexer;
-const Token = @import("../token.zig").Token;
-const Program = @import("../ast/ast.zig").Program;
+const lexer = @import("lexer");
+const Lexer = lexer.Lexer;
+const Token = lexer.Token;
+const Program = @import("ast.zig").Program;
 
 pub const Parser = struct {
     lexer: *Lexer,

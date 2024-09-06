@@ -1,21 +1,60 @@
 const std = @import("std");
 
-const test_targets = [_]std.Target.Query{
-    .{}, // native
-    // .{
-    //     .cpu_arch = .x86_64,
-    //     .os_tag = .linux,
-    // },
-    // .{
-    //     .cpu_arch = .aarch64,
-    //     .os_tag = .macos,
-    // },
-};
-
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const lexer_mod = b.addModule("lexer", .{
+        .root_source_file = b.path("lexer/main.zig"),
+        .optimize = optimize,
+        .target = target,
+    });
+
+    const parser_mod = b.addModule("parser", .{
+        .root_source_file = b.path("ast/main.zig"),
+        .optimize = optimize,
+        .target = target,
+    });
+    parser_mod.addImport("lexer", lexer_mod);
+
+    // Builds tests
+    const unit_tests = [_][]const u8{
+        "lexer/lexer_test.zig",
+        "ast/parser_test.zig",
+    };
+
+    const test_targets = [_]std.Target.Query{
+        .{}, // native
+        // .{
+        //     .cpu_arch = .x86_64,
+        //     .os_tag = .linux,
+        // },
+        // .{
+        //     .cpu_arch = .aarch64,
+        //     .os_tag = .macos,
+        // },
+    };
+
+    const test_step = b.step("test", "Run the tests");
+    for (unit_tests) |unit_test| {
+        for (test_targets) |test_target| {
+            const t = b.addTest(
+                .{
+                    .root_source_file = b.path(unit_test),
+                    .target = b.resolveTargetQuery(test_target),
+                },
+            );
+
+            t.root_module.addImport("lexer", lexer_mod);
+            t.root_module.addImport("parser", parser_mod);
+
+            // Run test
+            const run_unit_tests = b.addRunArtifact(t);
+            test_step.dependOn(&run_unit_tests.step);
+        }
+    }
+
+    // Builds executable
     const lexer = b.addSharedLibrary(.{
         .name = "lexer",
         .root_source_file = b.path("lexer/lexer.zig"),
@@ -48,21 +87,43 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(exe);
 
+    // Run after build
     const run_exe = b.addRunArtifact(exe);
-
     const run_step = b.step("run", "Run the application");
     run_step.dependOn(&run_exe.step);
+}
+
+pub fn build_tests(b: *std.Build) void {
+    const unit_tests = [_][]const u8{
+        "lexer/lexer_test.zig",
+        "ast/parser_test.zig",
+    };
+
+    const test_targets = [_]std.Target.Query{
+        .{}, // native
+        // .{
+        //     .cpu_arch = .x86_64,
+        //     .os_tag = .linux,
+        // },
+        // .{
+        //     .cpu_arch = .aarch64,
+        //     .os_tag = .macos,
+        // },
+    };
 
     const test_step = b.step("test", "Run the tests");
-    for (test_targets) |test_target| {
-        const unit_test = b.addTest(
-            .{
-                .root_source_file = b.path("lexer/lexer_test.zig"),
-                .target = b.resolveTargetQuery(test_target),
-            },
-        );
+    for (unit_tests) |unit_test| {
+        for (test_targets) |test_target| {
+            const t = b.addTest(
+                .{
+                    .root_source_file = b.path(unit_test),
+                    .target = b.resolveTargetQuery(test_target),
+                },
+            );
 
-        const run_unit_tests = b.addRunArtifact(unit_test);
-        test_step.dependOn(&run_unit_tests.step);
+            // Run test
+            const run_unit_tests = b.addRunArtifact(t);
+            test_step.dependOn(&run_unit_tests.step);
+        }
     }
 }

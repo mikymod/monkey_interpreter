@@ -1,21 +1,21 @@
-const Token = @import("../token.zig").Token;
+const Token = @import("lexer").Token;
 
-const Node = union(enum) {
+pub const Node = union(enum) {
     statement: Statement,
     expression: Expression,
 
     pub fn tokenLiteral(_: *Node) []const u8 {}
 };
 
-const Statement = struct {
+pub const Statement = struct {
     pub fn statementNode(_: *Statement) void {}
 };
 
-const Expression = struct {
+pub const Expression = struct {
     pub fn expressionNode(_: *Expression) void {}
 };
 
-const Program = struct {
+pub const Program = struct {
     statements: []Statement,
 
     pub fn tokenLiteral(p: *Program) []const u8 {
@@ -27,7 +27,7 @@ const Program = struct {
     }
 };
 
-const Identifier = struct {
+pub const Identifier = struct {
     token: Token,
     value: []const u8,
 
@@ -37,7 +37,7 @@ const Identifier = struct {
     }
 };
 
-const LetStatement = struct {
+pub const LetStatement = struct {
     token: Token,
     name: Identifier,
     value: Expression,
