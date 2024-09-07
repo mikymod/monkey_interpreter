@@ -1,6 +1,9 @@
-const Lexer = @import("../lexer/lexer.zig").Lexer;
-const Parser = @import("../ast/parser.zig").Parser;
+const lexer = @import("lexer");
+const Lexer = lexer.Lexer;
+const Parser = @import("parser").Parser;
 const expect = @import("std").testing.expect;
+const Program = @import("parser").ast.Program;
+const Statement = @import("parser").ast.Statement;
 
 test "Parser" {
     const input =
@@ -9,9 +12,10 @@ test "Parser" {
         \\let foobar = 1000
     ;
 
-    const lexer = Lexer{ .input = input };
-    const parser = Parser{ .lexer = &lexer };
+    var l = Lexer{ .input = input };
+    var parser = Parser{ .lexer = &l };
 
     const program = parser.parseProgram();
     expect(program != null);
+    expect(program.?.statements.len == 3);
 }

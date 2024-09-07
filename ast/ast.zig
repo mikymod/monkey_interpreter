@@ -1,49 +1,94 @@
-const Token = @import("../token.zig").Token;
+const Token = @import("lexer").Token;
+const Allocator = @import("std").mem.Allocator;
 
-const Node = union(enum) {
-    statement: Statement,
-    expression: Expression,
+///
+pub const Node = struct {
+    const Self = @This();
 
-    pub fn tokenLiteral(_: *Node) []const u8 {}
+    ptr: *anyopaque,
+    tokenLiteralFn: *const fn (*anyopaque) void,
+
+    pub fn init(ptr: *anyopaque) Self {
+        const Ptr = @TypeOf(ptr);
+        const tmp = struct {
+            pub fn tokenLiteral(p: *anyopaque) []const u8 {
+                const self: Ptr = @ptrCast(@alignCast(p));
+                return @call(.always_inline, @typeInfo(Ptr).Pointer.child.tokenLit, .{self});
+            }
+        };
+
+        return .{
+            .ptr = ptr,
+            .tokenLiteralFn = tmp.tokenLiteral,
+        };
+    }
+
+    pub fn tokenLit(self: *Node) []const u8 {
+        return self.tokenLitFn(self.ptr);
+    }
 };
 
-const Statement = struct {
-    pub fn statementNode(_: *Statement) void {}
-};
+///
+pub const Statement = union(enum) {
+    program: *Program,
+    let: *LetStatement,
 
-const Expression = struct {
-    pub fn expressionNode(_: *Expression) void {}
-};
-
-const Program = struct {
-    statements: []Statement,
-
-    pub fn tokenLiteral(p: *Program) []const u8 {
-        if (p.statements.len > 0) {
-            return p.statements[0].tokenLiteral();
-        } else {
-            return "";
+    pub fn node(self: *Statement) Node {
+        switch (self) {
+            inline else => |case| case.node(),
         }
     }
 };
 
-const Identifier = struct {
-    token: Token,
-    value: []const u8,
+///
+pub const Expression = union(enum) {
+    ident: *Identifier,
 
-    pub fn expressionNode(_: *Identifier) void {}
-    pub fn tokenLiteral(i: *Identifier) []const u8 {
-        return i.token.literal;
+    pub fn node(self: *Expression) Node {
+        switch (self) {
+            inline else => |case| return case.node(),
+        }
     }
 };
 
-const LetStatement = struct {
+pub const Program = struct {
+    statements: []Statement,
+
+    pub fn init(self: *Program) Node {
+        return Node.init(self);
+    }
+
+    pub fn tokenLiteral(p: *Program) []const u8 {
+        if (p.statements.len > 0) {
+            return p.statements[0].tokenLiteral();
+        }
+        return "";
+    }
+};
+
+pub const Identifier = struct {
+    token: Token,
+    value: []const u8,
+
+    pub fn node(self: *Identifier) Node {
+        return Node.init(self);
+    }
+
+    pub fn tokenLiteral(self: *Identifier) []const u8 {
+        return self.token.literal;
+    }
+};
+
+pub const LetStatement = struct {
     token: Token,
     name: Identifier,
     value: Expression,
 
-    pub fn statementNode(_: LetStatement) void {}
-    pub fn tokenLiteral(ls: LetStatement) []const u8 {
+    pub fn node(self: *LetStatement) Node {
+        return Node.init(self);
+    }
+
+    pub fn tokenLiteral(ls: *LetStatement) []const u8 {
         return ls.token.literal;
     }
 };
