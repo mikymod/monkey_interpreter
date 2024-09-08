@@ -1,4 +1,4 @@
-const Token = @import("lexer").Token;
+const Token = @import("Token.zig");
 const Allocator = @import("std").mem.Allocator;
 
 ///
@@ -81,8 +81,8 @@ pub const Identifier = struct {
 
 pub const LetStatement = struct {
     token: Token,
-    name: Identifier,
-    value: Expression,
+    name: *Identifier,
+    value: *Expression,
 
     pub fn node(self: *LetStatement) Node {
         return Node.init(self);
