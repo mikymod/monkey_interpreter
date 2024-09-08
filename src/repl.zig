@@ -1,6 +1,5 @@
 const std = @import("std");
-const Lexer = @import("lexer/lexer.zig").Lexer;
-const token = @import("token.zig");
+const Lexer = @import("Lexer.zig");
 
 const PROMPT = ">> ";
 
@@ -11,15 +10,9 @@ pub fn start() !void {
 
     while (true) {
         try stdout.print("{s}", .{PROMPT});
-        const line = try stdin.readUntilDelimiterOrEof(&buffer, '\r');
+        const line = try stdin.readUntilDelimiterOrEof(&buffer, '\r') orelse break;
 
-        var l = Lexer{
-            .input = line.?,
-            .position = 0,
-            .read_position = 0,
-            .ch = 0,
-        };
-        l.readChar();
+        var l = Lexer.init(line);
 
         while (true) {
             const t = l.nextToken();
