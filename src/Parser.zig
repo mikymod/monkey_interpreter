@@ -75,18 +75,44 @@ pub fn parseLetStatement(self: *Self) !?*ast.LetStatement {
 
     stmt.token = self.cur_token;
 
+    if (!self.expectPeek(Token.Type.IDENT)) {
+        return null;
+    }
+
     stmt.name = try self.allocator.create(ast.Identifier);
     errdefer {
         self.allocator.destroy(stmt.name);
         self.allocator.destroy(stmt);
     }
+    // FIXME: Error here
+    if (!self.expectPeek(Token.Type.ASSIGN)) {
+        return null;
+    }
+
     stmt.name.* = .{ .token = self.cur_token, .value = self.cur_token.literal };
 
-    while (self.cur_token.typez != Token.Type.SEMICOLON) {
+    while (!self.curTokenIs(Token.Type.SEMICOLON)) {
         self.nextToken();
     }
 
     return stmt;
+}
+
+pub fn curTokenIs(self: *Self, token_type: Token.Type) bool {
+    return self.cur_token.typez == token_type;
+}
+
+pub fn peekTokenIs(self: *Self, token_type: Token.Type) bool {
+    return self.peek_token.typez == token_type;
+}
+
+pub fn expectPeek(self: *Self, token_type: Token.Type) bool {
+    if (self.peekTokenIs(token_type)) {
+        self.nextToken();
+        return true;
+    }
+
+    return false;
 }
 
 const t = std.testing;
