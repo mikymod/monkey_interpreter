@@ -10,11 +10,13 @@ allocator: Allocator,
 lexer: *Lexer,
 cur_token: Token = undefined,
 peek_token: Token = undefined,
+errors: std.ArrayList([]const u8),
 
 pub fn init(allocator: Allocator, lexer: *Lexer) Self {
     var parser = Self{
         .allocator = allocator,
         .lexer = lexer,
+        .errors = std.ArrayList([]const u8).init(allocator),
     };
 
     parser.nextToken();
@@ -35,6 +37,11 @@ pub fn deinit(self: *Self, program: *ast.Program) void {
     }
     self.allocator.free(program.statements);
     self.allocator.destroy(program);
+
+    for (self.errors.items) |err| {
+        self.allocator.free(err);
+    }
+    self.errors.deinit();
 }
 
 pub fn nextToken(self: *Self) void {
@@ -112,7 +119,21 @@ pub fn expectPeek(self: *Self, token_type: Token.Type) bool {
         return true;
     }
 
+    self.peekError(token_type);
     return false;
+}
+
+pub fn peekError(self: *Self, token_type: Token.Type) void {
+    const err_str = std.fmt.allocPrint(
+        self.allocator,
+        "next token: expected {s}, got {s}.\n",
+        .{
+            token_type.name(),
+            self.peek_token.typez.name(),
+        },
+    ) catch unreachable;
+
+    self.errors.append(err_str) catch unreachable;
 }
 
 const t = std.testing;
@@ -130,6 +151,7 @@ test "Program - Let statements" {
     defer parser.deinit(program);
 
     try std.testing.expect(program.statements.len == 3);
+    try std.testing.expect(parser.errors.items.len == 0);
 
     for (program.statements) |stmt| {
         try std.testing.expect(stmt.let.token.typez == Token.Type.LET);
