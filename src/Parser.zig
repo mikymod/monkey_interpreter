@@ -32,6 +32,9 @@ pub fn deinit(self: *Self, program: *ast.Program) void {
                 self.allocator.destroy(s.name);
                 self.allocator.destroy(s);
             },
+            .@"return" => |s| {
+                self.allocator.destroy(s);
+            },
             else => unreachable,
         }
     }
@@ -72,6 +75,10 @@ pub fn parseStatement(self: *Self) !?ast.Statement {
             const letStmt = try self.parseLetStatement();
             return .{ .let = letStmt orelse return null };
         },
+        Token.Type.RETURN => {
+            const returnStmt = try self.parseReturnStatement();
+            return .{ .@"return" = returnStmt orelse return null };
+        },
         else => return null,
     }
 }
@@ -83,6 +90,7 @@ pub fn parseLetStatement(self: *Self) !?*ast.LetStatement {
     stmt.token = self.cur_token;
 
     if (!self.expectPeek(Token.Type.IDENT)) {
+        self.allocator.destroy(stmt);
         return null;
     }
 
@@ -91,12 +99,29 @@ pub fn parseLetStatement(self: *Self) !?*ast.LetStatement {
         self.allocator.destroy(stmt.name);
         self.allocator.destroy(stmt);
     }
-    // FIXME: Error here
+
     if (!self.expectPeek(Token.Type.ASSIGN)) {
+        self.allocator.destroy(stmt.name);
+        self.allocator.destroy(stmt);
         return null;
     }
 
     stmt.name.* = .{ .token = self.cur_token, .value = self.cur_token.literal };
+
+    while (!self.curTokenIs(Token.Type.SEMICOLON)) {
+        self.nextToken();
+    }
+
+    return stmt;
+}
+
+pub fn parseReturnStatement(self: *Self) !?*ast.ReturnStatement {
+    const stmt = try self.allocator.create(ast.ReturnStatement);
+    errdefer self.allocator.destroy(stmt);
+
+    self.nextToken();
+
+    // TODO: parse expression
 
     while (!self.curTokenIs(Token.Type.SEMICOLON)) {
         self.nextToken();
@@ -156,4 +181,44 @@ test "Program - Let statements" {
     for (program.statements) |stmt| {
         try std.testing.expect(stmt.let.token.typez == Token.Type.LET);
     }
+}
+
+test "Program - Parser errors" {
+    const input =
+        \\let five = 5;
+        \\let ten = 10;
+        \\let 2345235;
+    ;
+
+    var lexer = Lexer.init(input);
+    var parser = init(t.allocator, &lexer);
+    const program = try parser.parseProgram();
+    defer parser.deinit(program);
+
+    std.debug.print("Parser has {} errors.\n", .{parser.errors.items.len});
+    for (parser.errors.items) |err| {
+        std.debug.print("{s}\n", .{err});
+    }
+
+    try std.testing.expect(parser.errors.items.len == 1);
+}
+
+test "Parser - Return statement" {
+    const input =
+        \\return 5;
+        \\return 10;
+        \\return 993322;
+    ;
+
+    var lexer = Lexer.init(input);
+    var parser = init(t.allocator, &lexer);
+    const program = try parser.parseProgram();
+    defer parser.deinit(program);
+
+    try std.testing.expect(program.statements.len == 3);
+
+    // for (program.statements) |stmt| {
+    //     try std.testing.expect(std.mem.eql(u8, stmt.@"return".tokenLiteral(), "return"));
+    //     try std.testing.expect(@TypeOf(stmt) == ast.ReturnStatement);
+    // }
 }
