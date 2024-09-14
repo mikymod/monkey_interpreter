@@ -3,65 +3,44 @@ const Token = @import("Token.zig");
 const Allocator = @import("std").mem.Allocator;
 
 ///
-pub const Node = struct {
-    const Self = @This();
-
-    ptr: *anyopaque,
-    tokenLiteralFn: *const fn (*anyopaque) []const u8,
-    toStringFn: *const fn (*anyopaque, Allocator) []const u8,
-
-    pub fn init(ptr: *anyopaque) Self {
-        const Ptr = @TypeOf(ptr);
-        const tmp = struct {
-            pub fn tokenLiteral(p: *anyopaque) []const u8 {
-                const self: Ptr = @ptrCast(@alignCast(p));
-                return @call(.always_inline, @typeInfo(Ptr).Pointer.child.tokenLit, .{self});
-            }
-
-            pub fn toString(p: *anyopaque, allocator: Allocator) []const u8 {
-                const self: Ptr = @ptrCast(@alignCast(p));
-                return @call(.always_inline, @typeInfo(Ptr).Pointer.child.toString, .{ self, allocator });
-            }
-        };
-
-        return .{
-            .ptr = ptr,
-            .tokenLiteralFn = tmp.tokenLiteral,
-            .toStringFn = tmp.toString,
-        };
-    }
-
-    pub fn tokenLiteral(self: *Node) []const u8 {
-        return self.tokenLiteralFn(self.ptr);
-    }
+pub const Node = union(enum) {
+    program: *Program,
+    statement: *Statement,
+    expression: *Expression,
 
     pub fn toString(self: *Node, allocator: Allocator) []const u8 {
-        return self.toStringFn(self.ptr, allocator);
+        return switch (self.*) {
+            .program => |p| p.toString(allocator),
+            .statement => |s| s.toString(allocator),
+            .expression => |s| s.toString(allocator),
+        };
     }
 };
 
 ///
 pub const Statement = union(enum) {
-    program: *Program,
     let: *LetStatement,
     @"return": *ReturnStatement,
     expr: *ExpressionStatement,
 
-    pub fn node(self: *Statement) Node {
-        switch (self) {
-            inline else => |case| case.node(),
-        }
+    pub fn toString(self: *const Statement, allocator: Allocator) []const u8 {
+        return switch (self.*) {
+            .let => |s| s.toString(allocator),
+            .@"return" => |s| s.toString(allocator),
+            .expr => |s| s.toString(allocator),
+        };
     }
 };
 
 ///
 pub const Expression = union(enum) {
-    ident: *Identifier,
+    identifier: *Identifier,
 
-    pub fn node(self: *Expression) Node {
-        switch (self) {
-            inline else => |case| return case.node(),
-        }
+    pub fn toString(self: *Expression, allocator: Allocator) []const u8 {
+        return switch (self.*) {
+            .identifier => |s| s.*.toString(allocator),
+            // else => unreachable,
+        };
     }
 };
 
@@ -69,21 +48,17 @@ pub const Identifier = struct {
     token: Token,
     value: []const u8,
 
-    pub fn node(self: *Identifier) Node {
-        return Node.init(self);
-    }
-
     pub fn tokenLiteral(self: *Identifier) []const u8 {
         return self.token.literal;
+    }
+
+    pub fn toString(self: *Identifier, _: Allocator) []const u8 {
+        return self.value;
     }
 };
 
 pub const Program = struct {
     statements: []Statement,
-
-    pub fn init(self: *Program) Node {
-        return Node.init(self);
-    }
 
     pub fn tokenLiteral(p: *Program) []const u8 {
         if (p.statements.len > 0) {
@@ -93,13 +68,14 @@ pub const Program = struct {
     }
 
     pub fn toString(self: *Program, allocator: Allocator) []const u8 {
-        var buf = std.ArrayList(u8).init(allocator);
+        var buf = std.ArrayList(u8).initCapacity(allocator, 32) catch unreachable;
+        defer buf.deinit();
         for (self.statements) |stmt| {
-            const stmt_str = stmt.node().toString(allocator);
-            try buf.appendSlice(stmt_str);
-            allocator.free(stmt_str);
+            const stmt_str = stmt.toString(allocator);
+            defer allocator.free(stmt_str);
+            buf.appendSlice(stmt_str) catch unreachable;
         }
-        return buf.toOwnedSlice();
+        return buf.toOwnedSlice() catch unreachable;
     }
 };
 
@@ -108,22 +84,16 @@ pub const LetStatement = struct {
     name: *Identifier,
     value: *Expression,
 
-    pub fn node(self: *LetStatement) Node {
-        return Node.init(self);
-    }
-
     pub fn tokenLiteral(self: *LetStatement) []const u8 {
         return self.token.literal;
     }
 
     pub fn toString(self: *LetStatement, allocator: Allocator) []const u8 {
-        const value_str = self.value.node().toString(allocator);
-        defer allocator.free(value_str);
-        return try std.fmt.allocPrint(allocator, "{s} {s} = {s};", .{
+        return std.fmt.allocPrint(allocator, "{s} {s} = {s};", .{
             self.tokenLiteral(),
             self.name.tokenLiteral(),
-            value_str,
-        });
+            self.value.toString(allocator),
+        }) catch unreachable;
     }
 };
 
@@ -140,9 +110,9 @@ pub const ReturnStatement = struct {
     }
 
     pub fn toString(self: *ReturnStatement, allocator: Allocator) []const u8 {
-        const str = self.value.node().toString(allocator);
+        const str = self.value.toString(allocator);
         defer allocator.free(str);
-        return try std.fmt.allocPrint(allocator, "{s} {s};", .{ self.tokenLiteral(), str });
+        return std.fmt.allocPrint(allocator, "{s} {s};", .{ self.tokenLiteral(), str }) catch unreachable;
     }
 };
 
@@ -150,20 +120,47 @@ pub const ExpressionStatement = struct {
     token: Token,
     expression: *Expression,
 
-    pub fn node(self: *ExpressionStatement) Node {
-        return Node.init(self);
-    }
-
     pub fn tokenLiteral(self: *ExpressionStatement) []const u8 {
         return self.token.literal;
     }
 
     pub fn toString(self: *ExpressionStatement, allocator: Allocator) []const u8 {
-        const str = self.expression.node().toString(allocator);
+        const str = self.expression.toString(allocator);
         return str;
     }
 };
 
 test "AST - toString" {
     // TODO: write test for toString
+    var name_ident = Identifier{
+        .token = Token{
+            .typez = Token.Type.IDENT,
+            .literal = "myVar",
+        },
+        .value = "myVar",
+    };
+
+    var value_ident = Identifier{
+        .token = Token{
+            .typez = Token.Type.IDENT,
+            .literal = "anotherVar",
+        },
+        .value = "anotherVar",
+    };
+
+    var expr = Expression{ .identifier = &value_ident };
+
+    var let = LetStatement{
+        .token = Token{ .typez = Token.Type.LET, .literal = "let" },
+        .name = &name_ident,
+        .value = &expr,
+    };
+
+    var statements = [_]Statement{
+        .{ .let = &let },
+    };
+
+    var program = Program{ .statements = &statements };
+
+    try std.testing.expect(std.mem.eql(u8, program.toString(std.testing.allocator), "let myVar = anotherVar;"));
 }
