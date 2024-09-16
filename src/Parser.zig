@@ -12,7 +12,14 @@ cur_token: Token = undefined,
 peek_token: Token = undefined,
 errors: std.ArrayList([]const u8),
 
-const ParserError = error{ ExpectExpression, ExpectIdentifier, ExpectPeek, MemoryAllocation };
+const ParserError = error{
+    ExpectExpression,
+    ExpectIdentifier,
+    ExpectInteger,
+    InvalidInteger,
+    ExpectPeek,
+    MemoryAllocation,
+};
 
 const ExprPriority = enum(u4) {
     lowest = 0,
@@ -98,7 +105,7 @@ pub fn parseProgram(self: *Self) !*ast.Program {
     return program;
 }
 
-pub fn parseStatement(self: *Self) ParserError!ast.Statement {
+pub fn parseStatement(self: *Self) !ast.Statement {
     switch (self.cur_token.typez) {
         Token.Type.LET => {
             const letStmt = try self.parseLetStatement();
@@ -115,7 +122,7 @@ pub fn parseStatement(self: *Self) ParserError!ast.Statement {
     }
 }
 
-pub fn parseLetStatement(self: *Self) ParserError!ast.LetStatement {
+pub fn parseLetStatement(self: *Self) !ast.LetStatement {
     const token = self.cur_token;
 
     try self.expectPeek(Token.Type.IDENT);
@@ -154,7 +161,7 @@ pub fn parseReturnStatement(self: *Self) !ast.ReturnStatement {
     };
 }
 
-pub fn parseExpressionStatement(self: *Self) ParserError!ast.ExpressionStatement {
+pub fn parseExpressionStatement(self: *Self) !ast.ExpressionStatement {
     const expression = try self.parseExpression(ExprPriority.lowest);
     // Optional semicolon
     if (self.peekTokenIs(Token.Type.SEMICOLON)) {
@@ -171,7 +178,7 @@ pub fn parseExpressionStatement(self: *Self) ParserError!ast.ExpressionStatement
     };
 }
 
-pub fn parseExpression(self: Self, _: ExprPriority) ParserError!ast.Expression {
+pub fn parseExpression(self: *Self, _: ExprPriority) ParserError!ast.Expression {
     const left_exp = try self.parseExpressionByPrefix(self.cur_token);
 
     // TODO: parse infix expr
@@ -179,20 +186,49 @@ pub fn parseExpression(self: Self, _: ExprPriority) ParserError!ast.Expression {
     return left_exp;
 }
 
-fn parseExpressionByPrefix(self: Self, token: Token) ParserError!ast.Expression {
+pub fn parseExpressionByPrefix(self: *Self, token: Token) !ast.Expression {
     return switch (token.typez) {
         Token.Type.IDENT => ast.Expression{ .identifier = try self.parseIdentifier() },
+        Token.Type.INT => ast.Expression{ .integer = try self.parseIntegerLiteral() },
+        Token.Type.MINUS => ast.Expression{ .prefix = try self.parsePrefixExpression() },
+        Token.Type.BANG => ast.Expression{ .prefix = try self.parsePrefixExpression() },
         else => ParserError.ExpectExpression,
     };
 }
 
-fn parseIdentifier(self: Self) ParserError!ast.Identifier {
+fn parseIdentifier(self: Self) !ast.Identifier {
     return switch (self.cur_token.typez) {
         Token.Type.IDENT => ast.Identifier{
             .token = self.cur_token,
             .value = self.cur_token.literal,
         },
         else => ParserError.ExpectIdentifier,
+    };
+}
+
+fn parseIntegerLiteral(self: Self) ParserError!ast.IntegerLiteral {
+    return switch (self.cur_token.typez) {
+        Token.Type.INT => ast.IntegerLiteral{
+            .token = self.cur_token,
+            .value = std.fmt.parseInt(i64, self.cur_token.literal, 10) catch return ParserError.InvalidInteger,
+        },
+        else => ParserError.InvalidInteger,
+    };
+}
+
+fn parsePrefixExpression(self: *Self) !ast.PrefixExpression {
+    const token = self.cur_token;
+
+    self.nextToken();
+
+    const expr = try self.parseExpression(ExprPriority.prefix);
+    const exprPtr = self.allocator.create(ast.Expression) catch return ParserError.MemoryAllocation;
+    exprPtr.* = expr;
+
+    return ast.PrefixExpression{
+        .token = token,
+        .operator = token.literal,
+        .right = exprPtr,
     };
 }
 
@@ -204,7 +240,7 @@ pub fn peekTokenIs(self: Self, token_type: Token.Type) bool {
     return self.peek_token.typez == token_type;
 }
 
-pub fn expectPeek(self: *Self, token_type: Token.Type) ParserError!void {
+pub fn expectPeek(self: *Self, token_type: Token.Type) !void {
     if (self.peekTokenIs(token_type)) {
         self.nextToken();
     } else {
@@ -293,5 +329,33 @@ test "Parser - Parse Identifier" {
 
     try std.testing.expect(program.statements.len == 1);
 
-    // TODO: type checking
+    try std.testing.expect(@TypeOf(program.statements[0].expr) == ast.ExpressionStatement);
+}
+
+test "Parser - Parse Integer Literal" {
+    const input = "5;";
+
+    var lexer = Lexer.init(input);
+    var parser = init(t.allocator, &lexer);
+    const program = try parser.parseProgram();
+    defer parser.deinit(program);
+
+    try std.testing.expect(program.statements.len == 1);
+
+    try std.testing.expect(@TypeOf(program.statements[0].expr) == ast.ExpressionStatement);
+    try std.testing.expect(@TypeOf(program.statements[0].expr.expression.*.integer) == ast.IntegerLiteral);
+}
+
+test "Parser - Parse Prefix Expression" {
+    const input = "-5;";
+
+    var lexer = Lexer.init(input);
+    var parser = init(t.allocator, &lexer);
+    const program = try parser.parseProgram();
+    defer parser.deinit(program);
+
+    try std.testing.expect(program.statements.len == 1);
+
+    try std.testing.expect(@TypeOf(program.statements[0].expr) == ast.ExpressionStatement);
+    try std.testing.expect(@TypeOf(program.statements[0].expr.expression.*.prefix) == ast.PrefixExpression);
 }

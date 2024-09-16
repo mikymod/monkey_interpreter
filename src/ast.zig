@@ -35,11 +35,14 @@ pub const Statement = union(enum) {
 ///
 pub const Expression = union(enum) {
     identifier: Identifier,
+    integer: IntegerLiteral,
+    prefix: PrefixExpression,
 
-    pub fn toString(self: Expression, _: Allocator) []const u8 {
+    pub fn toString(self: Expression, allocator: Allocator) []const u8 {
         return switch (self) {
             .identifier => |s| s.toString(),
-            // else => unreachable,
+            .integer => |s| s.toString(allocator),
+            .prefix => |s| s.toString(allocator),
         };
     }
 };
@@ -123,6 +126,36 @@ pub const ExpressionStatement = struct {
     pub fn toString(self: ExpressionStatement, allocator: Allocator) []const u8 {
         const str = self.expression.toString(allocator);
         return str;
+    }
+};
+
+pub const IntegerLiteral = struct {
+    token: Token,
+    value: i64,
+
+    pub fn tokenLiteral(self: IntegerLiteral) []const u8 {
+        return self.token.literal;
+    }
+
+    pub fn toString(self: IntegerLiteral, allocator: Allocator) []const u8 {
+        return std.fmt.allocPrint(allocator, "{d}", .{self.value}) catch unreachable;
+    }
+};
+
+pub const PrefixExpression = struct {
+    token: Token,
+    operator: []const u8,
+    right: *Expression,
+
+    pub fn tokenLiteral(self: PrefixExpression) []const u8 {
+        return self.token.literal;
+    }
+
+    pub fn toString(self: PrefixExpression, allocator: Allocator) []const u8 {
+        return std.fmt.allocPrint(allocator, "({s}{s})", .{
+            self.operator,
+            self.right.toString(allocator),
+        }) catch unreachable;
     }
 };
 
