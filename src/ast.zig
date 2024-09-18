@@ -37,12 +37,14 @@ pub const Expression = union(enum) {
     identifier: Identifier,
     integer: IntegerLiteral,
     prefix: PrefixExpression,
+    infix: InfixExpression,
 
     pub fn toString(self: Expression, allocator: Allocator) []const u8 {
         return switch (self) {
             .identifier => |s| s.toString(),
             .integer => |s| s.toString(allocator),
             .prefix => |s| s.toString(allocator),
+            .infix => |s| s.toString(allocator),
         };
     }
 };
@@ -153,6 +155,25 @@ pub const PrefixExpression = struct {
 
     pub fn toString(self: PrefixExpression, allocator: Allocator) []const u8 {
         return std.fmt.allocPrint(allocator, "({s}{s})", .{
+            self.operator,
+            self.right.toString(allocator),
+        }) catch unreachable;
+    }
+};
+
+pub const InfixExpression = struct {
+    token: Token,
+    left: *Expression,
+    operator: []const u8,
+    right: *Expression,
+
+    pub fn tokenLiteral(self: PrefixExpression) []const u8 {
+        return self.token.literal;
+    }
+
+    pub fn toString(self: InfixExpression, allocator: Allocator) []const u8 {
+        return std.fmt.allocPrint(allocator, "{s} {s} {s}", .{
+            self.right.toString(allocator),
             self.operator,
             self.right.toString(allocator),
         }) catch unreachable;
