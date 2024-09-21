@@ -1,87 +1,118 @@
 const std = @import("std");
 
-typez: Type,
-literal: []const u8,
+pub const TokenType = enum {
+    illegal,
+    eof,
+    ident,
+    int,
 
-pub const Type = enum {
-    ILLEGAL,
-    EOF,
-    IDENT,
-    INT,
+    assign,
+    plus,
+    minus,
+    bang,
+    asterisk,
+    slash,
+    lt,
+    gt,
+    eq,
+    notEq,
 
-    ASSIGN,
-    PLUS,
-    MINUS,
-    BANG,
-    ASTERISK,
-    SLASH,
-    LT,
-    GT,
-    EQ,
-    NOT_EQ,
+    comma,
+    semicolon,
+    lparen,
+    rparen,
+    lbrace,
+    rbrace,
 
-    COMMA,
-    SEMICOLON,
-    LPAREN,
-    RPAREN,
-    LBRACE,
-    RBRACE,
+    function,
+    let,
+    true_,
+    false_,
+    if_,
+    else_,
+    return_,
 
-    FUNCTION,
-    LET,
-    TRUE,
-    FALSE,
-    IF,
-    ELSE,
-    RETURN,
-
-    pub fn name(self: Type) []const u8 {
-        return switch (self) {
-            .ILLEGAL => "ILLEGAL",
-            .EOF => "EOF",
-            .IDENT => "IDENT",
-            .INT => "INT",
-            .ASSIGN => "ASSIGN",
-            .PLUS => "PLUS",
-            .MINUS => "MINUS",
-            .BANG => "BANG",
-            .ASTERISK => "ASTERISK",
-            .SLASH => "SLASH",
-            .LT => "LT",
-            .GT => "GT",
-            .EQ => "EQ",
-            .NOT_EQ => "NOT_EQ",
-            .COMMA => "COMMA",
-            .SEMICOLON => "SEMICOLON",
-            .LPAREN => "LPAREN",
-            .RPAREN => "RPAREN",
-            .LBRACE => "LBRACE",
-            .RBRACE => "RBRACE",
-            .FUNCTION => "FUNCTION",
-            .LET => "LET",
-            .TRUE => "TRUE",
-            .FALSE => "FALSE",
-            .IF => "IF",
-            .ELSE => "ELSE",
-            .RETURN => "RETURN",
-        };
-    }
+    // pub fn name(self: TokenType) []const u8 {
+    //     return switch (self) {
+    //         .illegal => "illegal",
+    //         .eof => "eof",
+    //         .ident => "ident",
+    //         .int => "int",
+    //         .assign => "assign",
+    //         .plus => "plus",
+    //         .minus => "minus",
+    //         .bang => "bang",
+    //         .asterisk => "asterisk",
+    //         .slash => "slash",
+    //         .lt => "lt",
+    //         .gt => "gt",
+    //         .eq => "eq",
+    //         .notEq => "notEq",
+    //         .comma => "comma",
+    //         .semicolon => "semicolon",
+    //         .lparen => "lparen",
+    //         .rparen => "rparen",
+    //         .lbrace => "lbrace",
+    //         .rbrace => "rbrace",
+    //         .function => "function",
+    //         .let => "let",
+    //         .true_ => "true_",
+    //         .false_ => "false_",
+    //         .if_ => "if_",
+    //         .else_ => "else_",
+    //         .return_ => "return_",
+    //     };
+    // }
 };
 
-const keywords = std.StaticStringMap(Type).initComptime([_]struct { []const u8, Type }{
-    .{ "let", .LET },
-    .{ "fn", .FUNCTION },
-    .{ "if", .IF },
-    .{ "else", .ELSE },
-    .{ "return", .RETURN },
-    .{ "true", .TRUE },
-    .{ "false", .FALSE },
+pub const Token = union(TokenType) {
+    illegal: u8,
+    eof: void,
+
+    ident: []const u8,
+    int: []const u8,
+
+    assign: void,
+    plus: void,
+    minus: void,
+    bang: void,
+    asterisk: void,
+    slash: void,
+    lt: void,
+    gt: void,
+    eq: void,
+    notEq: void,
+
+    comma: void,
+    semicolon: void,
+    lparen: void,
+    rparen: void,
+    lbrace: void,
+    rbrace: void,
+
+    function: void,
+    let: void,
+    true_: void,
+    false_: void,
+    if_: void,
+    else_: void,
+    return_: void,
+};
+
+const keywords = std.StaticStringMap(Token).initComptime([_]struct { []const u8, Token }{
+    .{ "let", .let },
+    .{ "fn", .function },
+    .{ "if", .if_ },
+    .{ "else", .else_ },
+    .{ "return", .return_ },
+    .{ "true", .true_ },
+    .{ "false", .false_ },
 });
 
-pub fn lookupIdent(kw: []const u8) Type {
+pub fn lookupIdent(kw: []const u8) Token {
     if (keywords.get(kw)) |ident| {
         return ident;
     }
 
-    return Type.IDENT;
+    return Token{ .ident = kw };
 }

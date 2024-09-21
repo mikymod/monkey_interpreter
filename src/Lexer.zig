@@ -1,6 +1,7 @@
 const std = @import("std");
-const Token = @import("Token.zig");
-const lookupIdent = Token.lookupIdent;
+const token = @import("token.zig");
+const Token = token.Token;
+const lookupIdent = token.lookupIdent;
 const Allocator = std.mem.Allocator;
 
 input: []const u8,
@@ -21,10 +22,10 @@ pub fn init(input: []const u8) Self {
     return l;
 }
 
-///
-pub fn newToken(token_type: Token.Type, literal: []const u8) Token {
-    return Token{ .typez = token_type, .literal = literal };
-}
+// ///
+// pub fn newToken(token_type: Token.TokenType, literal: []const u8) Token {
+//     return Token{ .typez = token_type, .literal = literal };
+// }
 
 ///
 pub fn readChar(self: *Self) void {
@@ -82,44 +83,43 @@ fn isDigit(ch: u8) bool {
 pub fn nextToken(self: *Self) Token {
     self.skipWhitespace();
 
-    const tok = switch (self.ch) {
+    const tok: Token = switch (self.ch) {
         '=' => blk: {
             if (self.peekChar() == '=') {
                 self.readChar();
-                break :blk newToken(Token.Type.EQ, "==");
+                break :blk Token.eq;
             }
-            break :blk newToken(Token.Type.ASSIGN, "=");
+            break :blk Token.assign;
         },
-        '+' => newToken(Token.Type.PLUS, "+"),
-        '-' => newToken(Token.Type.MINUS, "-"),
+        '+' => Token.plus,
+        '-' => Token.minus,
         '!' => blk: {
             if (self.peekChar() == '=') {
                 self.readChar();
-                break :blk newToken(Token.Type.NOT_EQ, "!=");
+                break :blk Token.notEq;
             }
-            break :blk newToken(Token.Type.BANG, "!");
+            break :blk Token.bang;
         },
-        '/' => newToken(Token.Type.SLASH, "/"),
-        '*' => newToken(Token.Type.ASTERISK, "*"),
-        '<' => newToken(Token.Type.LT, "<"),
-        '>' => newToken(Token.Type.GT, ">"),
-        ';' => newToken(Token.Type.SEMICOLON, ";"),
-        ',' => newToken(Token.Type.COMMA, ","),
-        '(' => newToken(Token.Type.LPAREN, "("),
-        ')' => newToken(Token.Type.RPAREN, ")"),
-        '{' => newToken(Token.Type.LBRACE, "{"),
-        '}' => newToken(Token.Type.RBRACE, "}"),
-        0 => newToken(Token.Type.EOF, ""),
+        '/' => Token.slash,
+        '*' => Token.asterisk,
+        '<' => Token.lt,
+        '>' => Token.gt,
+        ';' => Token.semicolon,
+        ',' => Token.comma,
+        '(' => Token.lparen,
+        ')' => Token.rparen,
+        '{' => Token.lbrace,
+        '}' => Token.rbrace,
+        0 => Token.eof,
         else => {
             if (isLetter(self.ch)) {
                 const ident = readIdentifier(self);
-                const ident_type = lookupIdent(ident);
-                return newToken(ident_type, ident);
+                return lookupIdent(ident);
             } else if (isDigit(self.ch)) {
                 const num = readNumber(self);
-                return newToken(Token.Type.INT, num);
+                return token.Token{ .int = num };
             } else {
-                return newToken(Token.Type.ILLEGAL, "");
+                return token.Token{ .illegal = self.ch };
             }
         },
     };
@@ -128,28 +128,38 @@ pub fn nextToken(self: *Self) Token {
     return tok;
 }
 
-const expect = std.testing.expect;
+const t = std.testing;
+
+fn expectIdent(expected: Token, actual: Token) !void {
+    try t.expect(actual == .ident);
+    try t.expectEqualStrings(expected.ident, actual.ident);
+}
+
+fn expectInt(expected: Token, actual: Token) !void {
+    try t.expect(actual == .int);
+    try t.expectEqualStrings(expected.int, actual.int);
+}
 
 test "Lexer - Next Token Simple" {
     const input = " =+(){},;";
 
     const tokens = [_]Token{
-        Token{ .typez = Token.Type.ASSIGN, .literal = "=" },
-        Token{ .typez = Token.Type.PLUS, .literal = "+" },
-        Token{ .typez = Token.Type.LPAREN, .literal = "(" },
-        Token{ .typez = Token.Type.RPAREN, .literal = ")" },
-        Token{ .typez = Token.Type.LBRACE, .literal = "{" },
-        Token{ .typez = Token.Type.RBRACE, .literal = "}" },
-        Token{ .typez = Token.Type.COMMA, .literal = "," },
-        Token{ .typez = Token.Type.SEMICOLON, .literal = ";" },
-        Token{ .typez = Token.Type.EOF, .literal = "" },
+        Token.assign,
+        Token.plus,
+        Token.lparen,
+        Token.rparen,
+        Token.lbrace,
+        Token.rbrace,
+        Token.comma,
+        Token.semicolon,
+        Token.eof,
     };
 
     var l = init(input);
 
-    for (tokens) |t| {
-        const tok = l.nextToken();
-        try std.testing.expectEqualDeep(t, tok);
+    for (tokens) |expected| {
+        const actual = l.nextToken();
+        try t.expectEqual(expected, actual);
     }
 }
 
@@ -177,86 +187,90 @@ test "Lexer - Next Token Complex" {
     ;
 
     const tokens = [_]Token{
-        Token{ .typez = Token.Type.LET, .literal = "let" },
-        Token{ .typez = Token.Type.IDENT, .literal = "five" },
-        Token{ .typez = Token.Type.ASSIGN, .literal = "=" },
-        Token{ .typez = Token.Type.INT, .literal = "5" },
-        Token{ .typez = Token.Type.SEMICOLON, .literal = ";" },
-        Token{ .typez = Token.Type.LET, .literal = "let" },
-        Token{ .typez = Token.Type.IDENT, .literal = "ten" },
-        Token{ .typez = Token.Type.ASSIGN, .literal = "=" },
-        Token{ .typez = Token.Type.INT, .literal = "10" },
-        Token{ .typez = Token.Type.SEMICOLON, .literal = ";" },
-        Token{ .typez = Token.Type.LET, .literal = "let" },
-        Token{ .typez = Token.Type.IDENT, .literal = "add" },
-        Token{ .typez = Token.Type.ASSIGN, .literal = "=" },
-        Token{ .typez = Token.Type.FUNCTION, .literal = "fn" },
-        Token{ .typez = Token.Type.LPAREN, .literal = "(" },
-        Token{ .typez = Token.Type.IDENT, .literal = "x" },
-        Token{ .typez = Token.Type.COMMA, .literal = "," },
-        Token{ .typez = Token.Type.IDENT, .literal = "y" },
-        Token{ .typez = Token.Type.RPAREN, .literal = ")" },
-        Token{ .typez = Token.Type.LBRACE, .literal = "{" },
-        Token{ .typez = Token.Type.IDENT, .literal = "x" },
-        Token{ .typez = Token.Type.PLUS, .literal = "+" },
-        Token{ .typez = Token.Type.IDENT, .literal = "y" },
-        Token{ .typez = Token.Type.SEMICOLON, .literal = ";" },
-        Token{ .typez = Token.Type.RBRACE, .literal = "}" },
-        Token{ .typez = Token.Type.SEMICOLON, .literal = ";" },
-        Token{ .typez = Token.Type.LET, .literal = "let" },
-        Token{ .typez = Token.Type.IDENT, .literal = "result" },
-        Token{ .typez = Token.Type.ASSIGN, .literal = "=" },
-        Token{ .typez = Token.Type.IDENT, .literal = "add" },
-        Token{ .typez = Token.Type.LPAREN, .literal = "(" },
-        Token{ .typez = Token.Type.IDENT, .literal = "five" },
-        Token{ .typez = Token.Type.COMMA, .literal = "," },
-        Token{ .typez = Token.Type.IDENT, .literal = "ten" },
-        Token{ .typez = Token.Type.RPAREN, .literal = ")" },
-        Token{ .typez = Token.Type.SEMICOLON, .literal = ";" },
-        Token{ .typez = Token.Type.BANG, .literal = "!" },
-        Token{ .typez = Token.Type.MINUS, .literal = "-" },
-        Token{ .typez = Token.Type.SLASH, .literal = "/" },
-        Token{ .typez = Token.Type.ASTERISK, .literal = "*" },
-        Token{ .typez = Token.Type.INT, .literal = "5" },
-        Token{ .typez = Token.Type.SEMICOLON, .literal = ";" },
-        Token{ .typez = Token.Type.INT, .literal = "5" },
-        Token{ .typez = Token.Type.LT, .literal = "<" },
-        Token{ .typez = Token.Type.INT, .literal = "10" },
-        Token{ .typez = Token.Type.GT, .literal = ">" },
-        Token{ .typez = Token.Type.INT, .literal = "5" },
-        Token{ .typez = Token.Type.SEMICOLON, .literal = ";" },
-        Token{ .typez = Token.Type.IF, .literal = "if" },
-        Token{ .typez = Token.Type.LPAREN, .literal = "(" },
-        Token{ .typez = Token.Type.INT, .literal = "5" },
-        Token{ .typez = Token.Type.LT, .literal = "<" },
-        Token{ .typez = Token.Type.INT, .literal = "10" },
-        Token{ .typez = Token.Type.RPAREN, .literal = ")" },
-        Token{ .typez = Token.Type.LBRACE, .literal = "{" },
-        Token{ .typez = Token.Type.RETURN, .literal = "return" },
-        Token{ .typez = Token.Type.TRUE, .literal = "true" },
-        Token{ .typez = Token.Type.SEMICOLON, .literal = ";" },
-        Token{ .typez = Token.Type.RBRACE, .literal = "}" },
-        Token{ .typez = Token.Type.ELSE, .literal = "else" },
-        Token{ .typez = Token.Type.LBRACE, .literal = "{" },
-        Token{ .typez = Token.Type.RETURN, .literal = "return" },
-        Token{ .typez = Token.Type.FALSE, .literal = "false" },
-        Token{ .typez = Token.Type.SEMICOLON, .literal = ";" },
-        Token{ .typez = Token.Type.RBRACE, .literal = "}" },
-        Token{ .typez = Token.Type.INT, .literal = "10" },
-        Token{ .typez = Token.Type.EQ, .literal = "==" },
-        Token{ .typez = Token.Type.INT, .literal = "10" },
-        Token{ .typez = Token.Type.SEMICOLON, .literal = ";" },
-        Token{ .typez = Token.Type.INT, .literal = "10" },
-        Token{ .typez = Token.Type.NOT_EQ, .literal = "!=" },
-        Token{ .typez = Token.Type.INT, .literal = "9" },
-        Token{ .typez = Token.Type.SEMICOLON, .literal = ";" },
-        Token{ .typez = Token.Type.EOF, .literal = "" },
+        Token.let,
+        Token{ .ident = "five" },
+        Token.assign,
+        Token{ .int = "5" },
+        Token.semicolon,
+        Token.let,
+        Token{ .ident = "ten" },
+        Token.assign,
+        Token{ .int = "10" },
+        Token.semicolon,
+        Token.let,
+        Token{ .ident = "add" },
+        Token.assign,
+        Token.function,
+        Token.lparen,
+        Token{ .ident = "x" },
+        Token.comma,
+        Token{ .ident = "y" },
+        Token.rparen,
+        Token.lbrace,
+        Token{ .ident = "x" },
+        Token.plus,
+        Token{ .ident = "y" },
+        Token.semicolon,
+        Token.rbrace,
+        Token.semicolon,
+        Token.let,
+        Token{ .ident = "result" },
+        Token.assign,
+        Token{ .ident = "add" },
+        Token.lparen,
+        Token{ .ident = "five" },
+        Token.comma,
+        Token{ .ident = "ten" },
+        Token.rparen,
+        Token.semicolon,
+        Token.bang,
+        Token.minus,
+        Token.slash,
+        Token.asterisk,
+        Token{ .int = "5" },
+        Token.semicolon,
+        Token{ .int = "5" },
+        Token.lt,
+        Token{ .int = "10" },
+        Token.gt,
+        Token{ .int = "5" },
+        Token.semicolon,
+        Token.if_,
+        Token.lparen,
+        Token{ .int = "5" },
+        Token.lt,
+        Token{ .int = "10" },
+        Token.rparen,
+        Token.lbrace,
+        Token.return_,
+        Token.true_,
+        Token.semicolon,
+        Token.rbrace,
+        Token.else_,
+        Token.lbrace,
+        Token.return_,
+        Token.false_,
+        Token.semicolon,
+        Token.rbrace,
+        Token{ .int = "10" },
+        Token.eq,
+        Token{ .int = "10" },
+        Token.semicolon,
+        Token{ .int = "10" },
+        Token.notEq,
+        Token{ .int = "9" },
+        Token.semicolon,
+        Token.eof,
     };
 
     var l = init(input);
 
-    for (tokens) |t| {
-        const tok = l.nextToken();
-        try std.testing.expectEqualDeep(t, tok);
+    for (tokens) |expected| {
+        const actual = l.nextToken();
+        switch (expected) {
+            Token.ident => try expectIdent(expected, actual),
+            Token.int => try expectInt(expected, actual),
+            else => try t.expectEqual(expected, actual),
+        }
     }
 }

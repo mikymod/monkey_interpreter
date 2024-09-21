@@ -1,8 +1,10 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Lexer = @import("Lexer.zig");
-const Token = @import("Token.zig");
+const Token = @import("token.zig").Token;
+const TokenType = @import("token.zig").TokenType;
 const ast = @import("ast.zig");
+const Operator = ast.Operator;
 
 const Self = @This();
 
@@ -19,6 +21,7 @@ const ParserError = error{
     InvalidInteger,
     InvalidPrefix,
     InvalidInfix,
+    InvalidOperator,
     ExpectPeek,
     MemoryAllocation,
 };
@@ -33,16 +36,16 @@ const ExprPrecedence = enum(u4) {
     call = 6,
 
     fn fromToken(token: Token) ExprPrecedence {
-        return switch (token.typez) {
-            Token.Type.EQ => .equals,
-            Token.Type.NOT_EQ => .equals,
-            Token.Type.LT => .less_greater,
-            Token.Type.GT => .less_greater,
-            Token.Type.PLUS => .sum,
-            Token.Type.MINUS => .sum,
-            Token.Type.SLASH => .product,
-            Token.Type.ASTERISK => .product,
-            Token.Type.LPAREN => .call,
+        return switch (token) {
+            Token.eq => .equals,
+            Token.notEq => .equals,
+            Token.lt => .less_greater,
+            Token.gt => .less_greater,
+            Token.plus => .sum,
+            Token.minus => .sum,
+            Token.slash => .product,
+            Token.asterisk => .product,
+            Token.lparen => .call,
             else => .lowest,
         };
     }
@@ -97,7 +100,7 @@ pub fn parseProgram(self: *Self) !*ast.Program {
     errdefer self.allocator.destroy(program);
 
     var statements = std.ArrayList(ast.Statement).init(self.allocator);
-    while (self.cur_token.typez != Token.Type.EOF) {
+    while (self.cur_token != Token.eof) {
         const stmt = try self.parseStatement();
         try statements.append(stmt);
         self.nextToken();
@@ -108,12 +111,12 @@ pub fn parseProgram(self: *Self) !*ast.Program {
 }
 
 pub fn parseStatement(self: *Self) !ast.Statement {
-    switch (self.cur_token.typez) {
-        Token.Type.LET => {
+    switch (self.cur_token) {
+        Token.let => {
             const letStmt = try self.parseLetStatement();
             return ast.Statement{ .let = letStmt };
         },
-        Token.Type.RETURN => {
+        Token.return_ => {
             const returnStmt = try self.parseReturnStatement();
             return ast.Statement{ .ret = returnStmt };
         },
@@ -127,18 +130,21 @@ pub fn parseStatement(self: *Self) !ast.Statement {
 pub fn parseLetStatement(self: *Self) !ast.LetStatement {
     const token = self.cur_token;
 
-    try self.expectPeek(Token.Type.IDENT);
+    try self.expectPeek(Token.ident);
 
-    const name = ast.Identifier{
-        .token = self.cur_token,
-        .value = self.cur_token.literal,
+    const name = switch (self.cur_token) {
+        .ident => |ident| ast.Identifier{
+            .token = self.cur_token,
+            .value = ident,
+        },
+        else => unreachable,
     };
 
-    try self.expectPeek(Token.Type.ASSIGN);
+    try self.expectPeek(.assign);
     self.nextToken();
 
     const expression = try self.parseExpression(ExprPrecedence.lowest);
-    if (self.peekTokenIs(Token.Type.SEMICOLON)) {
+    if (self.peekTokenIs(.semicolon)) {
         self.nextToken();
     }
 
@@ -153,7 +159,7 @@ pub fn parseReturnStatement(self: *Self) !ast.ReturnStatement {
     self.nextToken();
 
     const expression = try self.parseExpression(ExprPrecedence.lowest);
-    if (self.peekTokenIs(Token.Type.SEMICOLON)) {
+    if (self.peekTokenIs(.semicolon)) {
         self.nextToken();
     }
 
@@ -166,7 +172,7 @@ pub fn parseReturnStatement(self: *Self) !ast.ReturnStatement {
 pub fn parseExpressionStatement(self: *Self) !ast.ExpressionStatement {
     const expression = try self.parseExpression(ExprPrecedence.lowest);
     // Optional semicolon
-    if (self.peekTokenIs(Token.Type.SEMICOLON)) {
+    if (self.peekTokenIs(.semicolon)) {
         self.nextToken();
     }
 
@@ -184,7 +190,7 @@ pub fn parseExpression(self: *Self, precedence: ExprPrecedence) ParserError!ast.
     var expr = try self.parseExpressionByPrefix(self.cur_token);
 
     const peek_precedence = self.peekPrecedence();
-    while (!self.peekTokenIs(Token.Type.SEMICOLON) and @intFromEnum(precedence) < @intFromEnum(peek_precedence)) {
+    while (!self.peekTokenIs(.semicolon) and @intFromEnum(precedence) < @intFromEnum(peek_precedence)) {
         const exprPtr = self.allocator.create(ast.Expression) catch return ParserError.MemoryAllocation;
         exprPtr.* = expr;
 
@@ -195,20 +201,20 @@ pub fn parseExpression(self: *Self, precedence: ExprPrecedence) ParserError!ast.
 }
 
 fn parseIdentifier(self: Self) !ast.Identifier {
-    return switch (self.cur_token.typez) {
-        Token.Type.IDENT => ast.Identifier{
+    return switch (self.cur_token) {
+        .ident => |value| ast.Identifier{
             .token = self.cur_token,
-            .value = self.cur_token.literal,
+            .value = value,
         },
         else => ParserError.ExpectIdentifier,
     };
 }
 
 fn parseIntegerLiteral(self: Self) ParserError!ast.IntegerLiteral {
-    return switch (self.cur_token.typez) {
-        Token.Type.INT => ast.IntegerLiteral{
+    return switch (self.cur_token) {
+        .int => |value| ast.IntegerLiteral{
             .token = self.cur_token,
-            .value = std.fmt.parseInt(i64, self.cur_token.literal, 10) catch return ParserError.InvalidInteger,
+            .value = std.fmt.parseInt(i64, value, 10) catch return ParserError.InvalidInteger,
         },
         else => ParserError.InvalidInteger,
     };
@@ -216,6 +222,7 @@ fn parseIntegerLiteral(self: Self) ParserError!ast.IntegerLiteral {
 
 fn parsePrefixExpression(self: *Self) ParserError!ast.PrefixExpression {
     const token = self.cur_token;
+    const operator = try getOperatorFromToken(token);
 
     self.nextToken();
 
@@ -225,7 +232,7 @@ fn parsePrefixExpression(self: *Self) ParserError!ast.PrefixExpression {
 
     return ast.PrefixExpression{
         .token = token,
-        .operator = token.literal,
+        .operator = operator,
         .right = exprPtr,
     };
 }
@@ -243,30 +250,30 @@ fn parseInfixExpression(self: *Self, left: *ast.Expression) ParserError!ast.Infi
     return ast.InfixExpression{
         .token = token,
         .left = left,
-        .operator = token.literal,
+        .operator = try getOperatorFromToken(self.cur_token),
         .right = rightPtr,
     };
 }
 
-pub fn parseExpressionByPrefix(self: *Self, token: Token) ParserError!ast.Expression {
-    return switch (token.typez) {
-        Token.Type.IDENT => ast.Expression{ .identifier = try self.parseIdentifier() },
-        Token.Type.INT => ast.Expression{ .integer = try self.parseIntegerLiteral() },
-        Token.Type.MINUS, Token.Type.BANG => ast.Expression{ .prefix = try self.parsePrefixExpression() },
+pub fn parseExpressionByPrefix(self: *Self, token_type: TokenType) ParserError!ast.Expression {
+    return switch (token_type) {
+        .ident => ast.Expression{ .identifier = try self.parseIdentifier() },
+        .int => ast.Expression{ .integer = try self.parseIntegerLiteral() },
+        .minus, .bang => ast.Expression{ .prefix = try self.parsePrefixExpression() },
         else => ParserError.InvalidPrefix,
     };
 }
 
-pub fn parseExpressionByInfix(self: *Self, token: Token, left: *ast.Expression) !ast.Expression {
-    return switch (token.typez) {
-        Token.Type.PLUS,
-        Token.Type.MINUS,
-        Token.Type.ASTERISK,
-        Token.Type.SLASH,
-        Token.Type.EQ,
-        Token.Type.NOT_EQ,
-        Token.Type.GT,
-        Token.Type.LT,
+pub fn parseExpressionByInfix(self: *Self, token_type: TokenType, left: *ast.Expression) !ast.Expression {
+    return switch (token_type) {
+        .plus,
+        .minus,
+        .asterisk,
+        .slash,
+        .eq,
+        .notEq,
+        .gt,
+        .lt,
         => {
             self.nextToken();
             return ast.Expression{ .infix = try self.parseInfixExpression(left) };
@@ -275,35 +282,35 @@ pub fn parseExpressionByInfix(self: *Self, token: Token, left: *ast.Expression) 
     };
 }
 
-pub fn curTokenIs(self: Self, token_type: Token.Type) bool {
-    return self.cur_token.typez == token_type;
+pub fn curTokenIs(self: Self, token_type: TokenType) bool {
+    return self.cur_token == token_type;
 }
 
-pub fn peekTokenIs(self: Self, token_type: Token.Type) bool {
-    return self.peek_token.typez == token_type;
+pub fn peekTokenIs(self: Self, token_type: TokenType) bool {
+    return self.peek_token == token_type;
 }
 
-pub fn expectPeek(self: *Self, token_type: Token.Type) !void {
+pub fn expectPeek(self: *Self, token_type: TokenType) !void {
     if (self.peekTokenIs(token_type)) {
         self.nextToken();
     } else {
-        self.peekError(token_type);
+        // self.peekError(token);
         return ParserError.ExpectPeek;
     }
 }
 
-pub fn peekError(self: *Self, token_type: Token.Type) void {
-    const err_str = std.fmt.allocPrint(
-        self.allocator,
-        "next token: expected {s}, got {s}.\n",
-        .{
-            token_type.name(),
-            self.peek_token.typez.name(),
-        },
-    ) catch unreachable;
+// pub fn peekError(self: *Self, token: Token) void {
+//     const err_str = std.fmt.allocPrint(
+//         self.allocator,
+//         "next token: expected {s}, got {s}.\n",
+//         .{
+//             token.name(),
+//             self.peek_token.name(),
+//         },
+//     ) catch unreachable;
 
-    self.errors.append(err_str) catch unreachable;
-}
+//     self.errors.append(err_str) catch unreachable;
+// }
 
 pub fn peekPrecedence(self: Self) ExprPrecedence {
     return ExprPrecedence.fromToken(self.peek_token);
@@ -311,6 +318,22 @@ pub fn peekPrecedence(self: Self) ExprPrecedence {
 
 pub fn currentPrecedence(self: Self) ExprPrecedence {
     return ExprPrecedence.fromToken(self.cur_token);
+}
+
+pub fn getOperatorFromToken(token: Token) !Operator {
+    return switch (token) {
+        .assign => .assign,
+        .asterisk => .asterisk,
+        .bang => .bang,
+        .eq => .eq,
+        .gt => .gt,
+        .lt => .lt,
+        .minus => .minus,
+        .notEq => .notEq,
+        .plus => .plus,
+        .slash => .slash,
+        else => ParserError.InvalidOperator,
+    };
 }
 
 const t = std.testing;
@@ -331,7 +354,7 @@ test "Program - Let statements" {
     try std.testing.expect(parser.errors.items.len == 0);
 
     for (program.statements) |stmt| {
-        try std.testing.expect(stmt.let.token.typez == Token.Type.LET);
+        try std.testing.expect(stmt.let.token == Token.let);
     }
 }
 
