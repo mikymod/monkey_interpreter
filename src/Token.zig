@@ -32,37 +32,37 @@ pub const TokenType = enum {
     else_,
     return_,
 
-    // pub fn name(self: TokenType) []const u8 {
-    //     return switch (self) {
-    //         .illegal => "illegal",
-    //         .eof => "eof",
-    //         .ident => "ident",
-    //         .int => "int",
-    //         .assign => "assign",
-    //         .plus => "plus",
-    //         .minus => "minus",
-    //         .bang => "bang",
-    //         .asterisk => "asterisk",
-    //         .slash => "slash",
-    //         .lt => "lt",
-    //         .gt => "gt",
-    //         .eq => "eq",
-    //         .notEq => "notEq",
-    //         .comma => "comma",
-    //         .semicolon => "semicolon",
-    //         .lparen => "lparen",
-    //         .rparen => "rparen",
-    //         .lbrace => "lbrace",
-    //         .rbrace => "rbrace",
-    //         .function => "function",
-    //         .let => "let",
-    //         .true_ => "true_",
-    //         .false_ => "false_",
-    //         .if_ => "if_",
-    //         .else_ => "else_",
-    //         .return_ => "return_",
-    //     };
-    // }
+    pub fn name(self: TokenType) []const u8 {
+        return switch (self) {
+            .illegal => "illegal",
+            .eof => "eof",
+            .ident => "ident",
+            .int => "int",
+            .assign => "assign",
+            .plus => "plus",
+            .minus => "minus",
+            .bang => "bang",
+            .asterisk => "asterisk",
+            .slash => "slash",
+            .lt => "lt",
+            .gt => "gt",
+            .eq => "eq",
+            .notEq => "notEq",
+            .comma => "comma",
+            .semicolon => "semicolon",
+            .lparen => "lparen",
+            .rparen => "rparen",
+            .lbrace => "lbrace",
+            .rbrace => "rbrace",
+            .function => "function",
+            .let => "let",
+            .true_ => "true",
+            .false_ => "false",
+            .if_ => "if",
+            .else_ => "else",
+            .return_ => "return",
+        };
+    }
 };
 
 pub const Token = union(TokenType) {

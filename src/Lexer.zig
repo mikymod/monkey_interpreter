@@ -22,11 +22,6 @@ pub fn init(input: []const u8) Self {
     return l;
 }
 
-// ///
-// pub fn newToken(token_type: Token.TokenType, literal: []const u8) Token {
-//     return Token{ .typez = token_type, .literal = literal };
-// }
-
 ///
 pub fn readChar(self: *Self) void {
     if (self.read_position >= self.input.len) {

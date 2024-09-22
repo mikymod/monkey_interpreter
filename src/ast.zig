@@ -59,17 +59,39 @@ pub const Identifier = struct {
 };
 
 pub const Program = struct {
-    statements: []Statement,
+    statements: std.ArrayList(Statement),
 
     pub fn toString(self: Program, allocator: Allocator) ![]const u8 {
         var buf = std.ArrayList(u8).init(allocator);
-        defer buf.deinit();
-        for (self.statements) |stmt| {
+        var i: usize = 0;
+        while (i < self.statements.items.len) : (i += 1) {
+            const stmt = self.statements.items[i];
             const stmt_str = stmt.toString(allocator);
             defer allocator.free(stmt_str);
             try buf.appendSlice(stmt_str);
         }
         return buf.toOwnedSlice();
+    }
+
+    pub fn deinit(self: Program, allocator: Allocator) void {
+        for (self.statements.items) |stmt| {
+            switch (stmt) {
+                .expr => |expr_stmt| {
+                    std.debug.print("ExpressionStatement deinit.\n", .{});
+                    switch (expr_stmt.expression.*) {
+                        .prefix => |prefix| prefix.deinit(allocator),
+                        .infix => |infix| infix.deinit(allocator),
+                        .identifier => {},
+                        .integer => {},
+                    }
+
+                    expr_stmt.deinit(allocator);
+                },
+                else => {},
+            }
+        }
+
+        self.statements.deinit();
     }
 };
 
@@ -110,6 +132,10 @@ pub const ExpressionStatement = struct {
         const str = self.expression.toString(allocator);
         return str;
     }
+
+    pub fn deinit(self: ExpressionStatement, allocator: Allocator) void {
+        allocator.destroy(self.expression);
+    }
 };
 
 pub const IntegerLiteral = struct {
@@ -136,6 +162,10 @@ pub const PrefixExpression = struct {
             self.right.toString(allocator),
         }) catch unreachable;
     }
+
+    pub fn deinit(self: PrefixExpression, allocator: Allocator) void {
+        allocator.destroy(self.right);
+    }
 };
 
 pub const InfixExpression = struct {
@@ -150,6 +180,11 @@ pub const InfixExpression = struct {
             self.operator.toString(),
             self.right.toString(allocator),
         }) catch unreachable;
+    }
+
+    pub fn deinit(self: InfixExpression, allocator: Allocator) void {
+        allocator.destroy(self.left);
+        allocator.destroy(self.right);
     }
 };
 
@@ -198,18 +233,16 @@ test "AST - toString" {
 
     const expr = Expression{ .identifier = value_ident };
 
-    var let = LetStatement{
+    var statements = std.ArrayList(Statement).init(t.allocator);
+    defer statements.deinit();
+
+    try statements.append(Statement{ .let = LetStatement{
         .token = Token.let,
         .name = name_ident,
         .value = expr,
-    };
-    _ = &let;
+    } });
 
-    var statements = [_]Statement{
-        .{ .let = let },
-    };
-
-    const program = Program{ .statements = &statements };
+    const program = Program{ .statements = statements };
     _ = &program;
 
     const str = try program.toString(t.allocator);
