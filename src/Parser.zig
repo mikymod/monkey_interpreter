@@ -20,6 +20,7 @@ const ParserError = error{
     ExpectInteger,
     InvalidProgram,
     InvalidInteger,
+    InvalidBoolean,
     InvalidPrefix,
     InvalidInfix,
     InvalidOperator,
@@ -197,6 +198,17 @@ fn parseIntegerLiteral(self: Self) !ast.IntegerLiteral {
     };
 }
 
+fn parseBooleanLiteral(self: Self) !ast.BooleanLiteral {
+    return ast.BooleanLiteral{
+        .token = self.cur_token,
+        .value = switch (self.cur_token) {
+            .true_ => true,
+            .false_ => false,
+            else => return ParserError.InvalidBoolean,
+        },
+    };
+}
+
 fn parsePrefixExpression(self: *Self) ParserError!ast.PrefixExpression {
     const token = self.cur_token;
     const operator = try getOperatorFromToken(token);
@@ -238,6 +250,7 @@ pub fn parseExpressionByPrefix(self: *Self, token_type: TokenType) !ast.Expressi
         .ident => ast.Expression{ .identifier = try self.parseIdentifier() },
         .int => ast.Expression{ .integer = try self.parseIntegerLiteral() },
         .minus, .bang => ast.Expression{ .prefix = try self.parsePrefixExpression() },
+        .true_, .false_ => ast.Expression{ .boolean = try self.parseBooleanLiteral() },
         else => ParserError.InvalidPrefix,
     };
 }
@@ -426,4 +439,33 @@ test "Parser - Parse Infix Expression" {
     defer parser.deinit(program);
 
     try std.testing.expect(program.statements.items.len == 8);
+}
+
+test "Parser - Test boolean literals" {
+    const input =
+        \\true;
+        \\false;
+        \\true == true;
+        \\false != true;
+        \\false == false;
+        \\3 > 5 == false;
+    ;
+
+    var lexer = Lexer.init(input);
+    var parser = init(t.allocator, &lexer);
+    const program = try parser.parseProgram();
+    defer parser.deinit(program);
+
+    try t.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
+    try t.expect(@TypeOf(program.statements.items[0].expr.expression.*.boolean) == ast.BooleanLiteral);
+    try t.expect(@TypeOf(program.statements.items[1].expr) == ast.ExpressionStatement);
+    try t.expect(@TypeOf(program.statements.items[1].expr.expression.*.boolean) == ast.BooleanLiteral);
+    try t.expect(@TypeOf(program.statements.items[2].expr) == ast.ExpressionStatement);
+    try t.expect(@TypeOf(program.statements.items[2].expr.expression.*.infix) == ast.InfixExpression);
+    try t.expect(@TypeOf(program.statements.items[3].expr) == ast.ExpressionStatement);
+    try t.expect(@TypeOf(program.statements.items[3].expr.expression.*.infix) == ast.InfixExpression);
+    try t.expect(@TypeOf(program.statements.items[4].expr) == ast.ExpressionStatement);
+    try t.expect(@TypeOf(program.statements.items[4].expr.expression.*.infix) == ast.InfixExpression);
+    try t.expect(@TypeOf(program.statements.items[5].expr) == ast.ExpressionStatement);
+    try t.expect(@TypeOf(program.statements.items[5].expr.expression.*.infix) == ast.InfixExpression);
 }

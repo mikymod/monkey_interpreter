@@ -36,15 +36,17 @@ pub const Statement = union(enum) {
 pub const Expression = union(enum) {
     identifier: Identifier,
     integer: IntegerLiteral,
+    boolean: BooleanLiteral,
     prefix: PrefixExpression,
     infix: InfixExpression,
 
     pub fn toString(self: Expression, allocator: Allocator) []const u8 {
         return switch (self) {
-            .identifier => |s| s.toString(),
-            .integer => |s| s.toString(allocator),
-            .prefix => |s| s.toString(allocator),
-            .infix => |s| s.toString(allocator),
+            .identifier => |ident| ident.toString(),
+            .integer => |integer| integer.toString(allocator),
+            .boolean => |boolean| boolean.toString(),
+            .prefix => |prefix| prefix.toString(allocator),
+            .infix => |infix| infix.toString(allocator),
         };
     }
 };
@@ -83,6 +85,7 @@ pub const Program = struct {
                         .infix => |infix| infix.deinit(allocator),
                         .identifier => {},
                         .integer => {},
+                        .boolean => {},
                     }
 
                     expr_stmt.deinit(allocator);
@@ -185,6 +188,15 @@ pub const InfixExpression = struct {
     pub fn deinit(self: InfixExpression, allocator: Allocator) void {
         allocator.destroy(self.left);
         allocator.destroy(self.right);
+    }
+};
+
+pub const BooleanLiteral = struct {
+    token: Token,
+    value: bool,
+
+    pub fn toString(self: BooleanLiteral) []const u8 {
+        return if (self.value) "true" else "false";
     }
 };
 
