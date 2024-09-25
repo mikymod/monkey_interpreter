@@ -245,17 +245,26 @@ fn parseInfixExpression(self: *Self, left: *ast.Expression) ParserError!ast.Infi
     };
 }
 
+fn parseGroupedExpression(self: *Self) ParserError!ast.Expression {
+    self.nextToken();
+    const expr = self.parseExpression(.lowest);
+    try self.expectPeek(.rparen);
+    return expr;
+}
+
 pub fn parseExpressionByPrefix(self: *Self, token_type: TokenType) !ast.Expression {
     return switch (token_type) {
         .ident => ast.Expression{ .identifier = try self.parseIdentifier() },
         .int => ast.Expression{ .integer = try self.parseIntegerLiteral() },
         .minus, .bang => ast.Expression{ .prefix = try self.parsePrefixExpression() },
         .true_, .false_ => ast.Expression{ .boolean = try self.parseBooleanLiteral() },
+        .lparen => try self.parseGroupedExpression(),
         else => ParserError.InvalidPrefix,
     };
 }
 
 pub fn parseExpressionByInfix(self: *Self, token_type: TokenType, left: *ast.Expression) !ast.Expression {
+    self.nextToken();
     return switch (token_type) {
         .plus,
         .minus,
@@ -266,7 +275,6 @@ pub fn parseExpressionByInfix(self: *Self, token_type: TokenType, left: *ast.Exp
         .gt,
         .lt,
         => {
-            self.nextToken();
             return ast.Expression{ .infix = try self.parseInfixExpression(left) };
         },
         else => ParserError.InvalidInfix,
@@ -431,6 +439,7 @@ test "Parser - Parse Infix Expression" {
         \\5 < 5;
         \\5 == 5;
         \\5 != 5;
+        \\-a * b;
     ;
 
     var lexer = Lexer.init(input);
@@ -438,7 +447,7 @@ test "Parser - Parse Infix Expression" {
     const program = try parser.parseProgram();
     defer parser.deinit(program);
 
-    try std.testing.expect(program.statements.items.len == 8);
+    try std.testing.expect(program.statements.items.len == 9);
 }
 
 test "Parser - Test boolean literals" {
@@ -468,4 +477,13 @@ test "Parser - Test boolean literals" {
     try t.expect(@TypeOf(program.statements.items[4].expr.expression.*.infix) == ast.InfixExpression);
     try t.expect(@TypeOf(program.statements.items[5].expr) == ast.ExpressionStatement);
     try t.expect(@TypeOf(program.statements.items[5].expr.expression.*.infix) == ast.InfixExpression);
+}
+
+test "Parser - Operator Precedence Parsing" {
+    const input = "1 + (2 + 3) + 4";
+
+    var lexer = Lexer.init(input);
+    var parser = init(t.allocator, &lexer);
+    const program = try parser.parseProgram();
+    defer parser.deinit(program);
 }
