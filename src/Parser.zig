@@ -167,8 +167,8 @@ pub fn parseExpressionStatement(self: *Self) !ast.ExpressionStatement {
 pub fn parseExpression(self: *Self, precedence: ExprPrecedence) !ast.Expression {
     var expr = try self.parseExpressionByPrefix(self.cur_token);
 
-    const peek_precedence = self.peekPrecedence();
-    while (!self.peekTokenIs(.semicolon) and @intFromEnum(precedence) < @intFromEnum(peek_precedence)) {
+    // const peek_precedence = self.peekPrecedence();
+    while (!self.peekTokenIs(.semicolon) and @intFromEnum(precedence) < @intFromEnum(self.peekPrecedence())) {
         const exprPtr = self.allocator.create(ast.Expression) catch return ParserError.MemoryAllocation;
         exprPtr.* = expr;
 
@@ -480,7 +480,7 @@ test "Parser - Test boolean literals" {
 }
 
 test "Parser - Operator Precedence Parsing" {
-    const input = "1 + (2 + 3) + 4";
+    const input = "1 + (2 + 3) + 4;";
 
     var lexer = Lexer.init(input);
     var parser = init(t.allocator, &lexer);
