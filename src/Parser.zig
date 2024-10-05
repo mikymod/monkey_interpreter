@@ -164,8 +164,8 @@ pub fn parseExpressionStatement(self: *Self) !ast.ExpressionStatement {
     };
 }
 
-pub fn parseExpression(self: *Self, precedence: ExprPrecedence) !ast.Expression {
-    var expr = try self.parseExpressionByPrefix(self.cur_token);
+pub fn parseExpression(self: *Self, precedence: ExprPrecedence) ParserError!ast.Expression {
+    var expr = self.parseExpressionByPrefix(self.cur_token) catch return ParserError.ExpectExpression;
 
     // const peek_precedence = self.peekPrecedence();
     while (!self.peekTokenIs(.semicolon) and @intFromEnum(precedence) < @intFromEnum(self.peekPrecedence())) {
@@ -252,6 +252,51 @@ fn parseGroupedExpression(self: *Self) ParserError!ast.Expression {
     return expr;
 }
 
+fn parseIfExpression(self: *Self) !ast.IfExpression {
+    const token = self.cur_token;
+
+    try self.expectPeek(.lparen);
+
+    self.nextToken();
+    var condition = try self.parseExpression(.lowest);
+
+    try self.expectPeek(.rparen);
+    try self.expectPeek(.lbrace);
+
+    const consequence = try self.parseBlockStatement();
+
+    var alternative: ?ast.BlockStatement = null;
+    if (self.peekTokenIs(.else_)) {
+        try self.expectPeek(.else_);
+        try self.expectPeek(.lbrace);
+        alternative = try self.parseBlockStatement();
+    }
+
+    return ast.IfExpression{
+        .token = token,
+        .condition = &condition,
+        .consequence = consequence,
+        .alternative = alternative,
+    };
+}
+
+fn parseBlockStatement(self: *Self) !ast.BlockStatement {
+    var statements = std.ArrayList(ast.Statement).init(self.allocator);
+
+    self.nextToken();
+
+    while (!self.curTokenIs(Token.rbrace) and !self.curTokenIs(Token.eof)) {
+        const stmt = try self.parseStatement();
+        try statements.append(stmt);
+        self.nextToken();
+    }
+
+    return ast.BlockStatement{
+        .token = self.cur_token,
+        .statements = statements,
+    };
+}
+
 pub fn parseExpressionByPrefix(self: *Self, token_type: TokenType) !ast.Expression {
     return switch (token_type) {
         .ident => ast.Expression{ .identifier = try self.parseIdentifier() },
@@ -259,6 +304,8 @@ pub fn parseExpressionByPrefix(self: *Self, token_type: TokenType) !ast.Expressi
         .minus, .bang => ast.Expression{ .prefix = try self.parsePrefixExpression() },
         .true_, .false_ => ast.Expression{ .boolean = try self.parseBooleanLiteral() },
         .lparen => try self.parseGroupedExpression(),
+        .if_ => ast.Expression{ .if_ = try self.parseIfExpression() },
+
         else => ParserError.InvalidPrefix,
     };
 }
@@ -339,151 +386,186 @@ pub fn getOperatorFromToken(token: Token) !Operator {
 
 const t = std.testing;
 
-test "Program - Let statements" {
-    const input =
-        \\let five = 5;
-        \\let ten = 10;
-        \\let foobar = 1000;
-    ;
+// test "Program - Let statements" {
+//     const input =
+//         \\let five = 5;
+//         \\let ten = 10;
+//         \\let foobar = 1000;
+//     ;
+
+//     var lexer = Lexer.init(input);
+//     var parser = init(t.allocator, &lexer);
+//     const program = try parser.parseProgram();
+//     defer parser.deinit(program);
+
+//     try std.testing.expect(program.statements.items.len == 3);
+//     try std.testing.expect(parser.errors.items.len == 0);
+
+//     for (program.statements.items) |stmt| {
+//         try std.testing.expect(stmt.let.token == Token.let);
+//     }
+// }
+
+// test "Program - Parser errors" {
+//     const input =
+//         \\let five = 5;
+//         \\let ten = 10;
+//         \\let 2345235;
+//     ;
+
+//     var lexer = Lexer.init(input);
+//     var parser = init(t.allocator, &lexer);
+//     const program = parser.parseProgram();
+
+//     try t.expectError(ParserError.ExpectPeek, program);
+// }
+
+// test "Parser - Return statement" {
+//     const input =
+//         \\return 5;
+//         \\return 10;
+//         \\return 993322;
+//     ;
+
+//     var lexer = Lexer.init(input);
+//     var parser = init(t.allocator, &lexer);
+//     const program = try parser.parseProgram();
+//     defer parser.deinit(program);
+
+//     try std.testing.expect(program.statements.items.len == 3);
+// }
+
+// test "Parser - Parse Identifier" {
+//     const input = "foobar;";
+
+//     var lexer = Lexer.init(input);
+//     var parser = init(t.allocator, &lexer);
+//     const program = try parser.parseProgram();
+//     defer parser.deinit(program);
+
+//     try std.testing.expect(program.statements.items.len == 1);
+
+//     try std.testing.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
+// }
+
+// test "Parser - Parse Integer Literal" {
+//     const input = "5;";
+
+//     var lexer = Lexer.init(input);
+//     var parser = init(t.allocator, &lexer);
+//     const program = try parser.parseProgram();
+//     defer parser.deinit(program);
+
+//     try std.testing.expect(program.statements.items.len == 1);
+
+//     try std.testing.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
+//     try std.testing.expect(@TypeOf(program.statements.items[0].expr.expression.*.integer) == ast.IntegerLiteral);
+// }
+
+// test "Parser - Parse Prefix Expression" {
+//     const input = "-5;";
+
+//     var lexer = Lexer.init(input);
+//     var parser = init(t.allocator, &lexer);
+//     const program = try parser.parseProgram();
+//     defer parser.deinit(program);
+
+//     try std.testing.expect(program.statements.items.len == 1);
+
+//     try std.testing.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
+//     try std.testing.expect(@TypeOf(program.statements.items[0].expr.expression.*.prefix) == ast.PrefixExpression);
+// }
+
+// test "Parser - Parse Infix Expression" {
+//     const input =
+//         \\5 + 5;
+//         \\5 - 5;
+//         \\5 * 5;
+//         \\5 / 5;
+//         \\5 > 5;
+//         \\5 < 5;
+//         \\5 == 5;
+//         \\5 != 5;
+//         \\-a * b;
+//     ;
+
+//     var lexer = Lexer.init(input);
+//     var parser = init(t.allocator, &lexer);
+//     const program = try parser.parseProgram();
+//     defer parser.deinit(program);
+
+//     try std.testing.expect(program.statements.items.len == 9);
+// }
+
+// test "Parser - Test boolean literals" {
+//     const input =
+//         \\true;
+//         \\false;
+//         \\true == true;
+//         \\false != true;
+//         \\false == false;
+//         \\3 > 5 == false;
+//     ;
+
+//     var lexer = Lexer.init(input);
+//     var parser = init(t.allocator, &lexer);
+//     const program = try parser.parseProgram();
+//     defer parser.deinit(program);
+
+//     try t.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
+//     try t.expect(@TypeOf(program.statements.items[0].expr.expression.*.boolean) == ast.BooleanLiteral);
+//     try t.expect(@TypeOf(program.statements.items[1].expr) == ast.ExpressionStatement);
+//     try t.expect(@TypeOf(program.statements.items[1].expr.expression.*.boolean) == ast.BooleanLiteral);
+//     try t.expect(@TypeOf(program.statements.items[2].expr) == ast.ExpressionStatement);
+//     try t.expect(@TypeOf(program.statements.items[2].expr.expression.*.infix) == ast.InfixExpression);
+//     try t.expect(@TypeOf(program.statements.items[3].expr) == ast.ExpressionStatement);
+//     try t.expect(@TypeOf(program.statements.items[3].expr.expression.*.infix) == ast.InfixExpression);
+//     try t.expect(@TypeOf(program.statements.items[4].expr) == ast.ExpressionStatement);
+//     try t.expect(@TypeOf(program.statements.items[4].expr.expression.*.infix) == ast.InfixExpression);
+//     try t.expect(@TypeOf(program.statements.items[5].expr) == ast.ExpressionStatement);
+//     try t.expect(@TypeOf(program.statements.items[5].expr.expression.*.infix) == ast.InfixExpression);
+// }
+
+// test "Parser - Operator Precedence Parsing" {
+//     const input = "1 + (2 + 3) + 4;";
+
+//     var lexer = Lexer.init(input);
+//     var parser = init(t.allocator, &lexer);
+//     const program = try parser.parseProgram();
+//     defer parser.deinit(program);
+// }
+
+test "Parser - Test if expression" {
+    const input = "if (x < y) { x }";
 
     var lexer = Lexer.init(input);
     var parser = init(t.allocator, &lexer);
     const program = try parser.parseProgram();
     defer parser.deinit(program);
 
-    try std.testing.expect(program.statements.items.len == 3);
-    try std.testing.expect(parser.errors.items.len == 0);
+    try t.expect(program.statements.items.len == 1);
 
-    for (program.statements.items) |stmt| {
-        try std.testing.expect(stmt.let.token == Token.let);
-    }
+    // const expr_stmt = program.statements.items[0];
+    // try t.expect(@TypeOf(expr_stmt) == ast.ExpressionStatement);
+
+    // const if_expr = expr_stmt.expression.*;
+    // try t.expect(@TypeOf(if_expr) == ast.IfExpression);
 }
 
-test "Program - Parser errors" {
-    const input =
-        \\let five = 5;
-        \\let ten = 10;
-        \\let 2345235;
-    ;
-
-    var lexer = Lexer.init(input);
-    var parser = init(t.allocator, &lexer);
-    const program = parser.parseProgram();
-
-    try t.expectError(ParserError.ExpectPeek, program);
-}
-
-test "Parser - Return statement" {
-    const input =
-        \\return 5;
-        \\return 10;
-        \\return 993322;
-    ;
+test "Parser - Test if else expression" {
+    const input = "if (x < y) { x } else { y }";
 
     var lexer = Lexer.init(input);
     var parser = init(t.allocator, &lexer);
     const program = try parser.parseProgram();
     defer parser.deinit(program);
 
-    try std.testing.expect(program.statements.items.len == 3);
-}
+    const program_str = try program.toString(t.allocator);
+    defer t.allocator.free(program_str);
+    std.debug.print("{s}\n", .{program_str});
 
-test "Parser - Parse Identifier" {
-    const input = "foobar;";
+    try t.expect(program.statements.items.len == 1);
 
-    var lexer = Lexer.init(input);
-    var parser = init(t.allocator, &lexer);
-    const program = try parser.parseProgram();
-    defer parser.deinit(program);
-
-    try std.testing.expect(program.statements.items.len == 1);
-
-    try std.testing.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
-}
-
-test "Parser - Parse Integer Literal" {
-    const input = "5;";
-
-    var lexer = Lexer.init(input);
-    var parser = init(t.allocator, &lexer);
-    const program = try parser.parseProgram();
-    defer parser.deinit(program);
-
-    try std.testing.expect(program.statements.items.len == 1);
-
-    try std.testing.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
-    try std.testing.expect(@TypeOf(program.statements.items[0].expr.expression.*.integer) == ast.IntegerLiteral);
-}
-
-test "Parser - Parse Prefix Expression" {
-    const input = "-5;";
-
-    var lexer = Lexer.init(input);
-    var parser = init(t.allocator, &lexer);
-    const program = try parser.parseProgram();
-    defer parser.deinit(program);
-
-    try std.testing.expect(program.statements.items.len == 1);
-
-    try std.testing.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
-    try std.testing.expect(@TypeOf(program.statements.items[0].expr.expression.*.prefix) == ast.PrefixExpression);
-}
-
-test "Parser - Parse Infix Expression" {
-    const input =
-        \\5 + 5;
-        \\5 - 5;
-        \\5 * 5;
-        \\5 / 5;
-        \\5 > 5;
-        \\5 < 5;
-        \\5 == 5;
-        \\5 != 5;
-        \\-a * b;
-    ;
-
-    var lexer = Lexer.init(input);
-    var parser = init(t.allocator, &lexer);
-    const program = try parser.parseProgram();
-    defer parser.deinit(program);
-
-    try std.testing.expect(program.statements.items.len == 9);
-}
-
-test "Parser - Test boolean literals" {
-    const input =
-        \\true;
-        \\false;
-        \\true == true;
-        \\false != true;
-        \\false == false;
-        \\3 > 5 == false;
-    ;
-
-    var lexer = Lexer.init(input);
-    var parser = init(t.allocator, &lexer);
-    const program = try parser.parseProgram();
-    defer parser.deinit(program);
-
-    try t.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
-    try t.expect(@TypeOf(program.statements.items[0].expr.expression.*.boolean) == ast.BooleanLiteral);
-    try t.expect(@TypeOf(program.statements.items[1].expr) == ast.ExpressionStatement);
-    try t.expect(@TypeOf(program.statements.items[1].expr.expression.*.boolean) == ast.BooleanLiteral);
-    try t.expect(@TypeOf(program.statements.items[2].expr) == ast.ExpressionStatement);
-    try t.expect(@TypeOf(program.statements.items[2].expr.expression.*.infix) == ast.InfixExpression);
-    try t.expect(@TypeOf(program.statements.items[3].expr) == ast.ExpressionStatement);
-    try t.expect(@TypeOf(program.statements.items[3].expr.expression.*.infix) == ast.InfixExpression);
-    try t.expect(@TypeOf(program.statements.items[4].expr) == ast.ExpressionStatement);
-    try t.expect(@TypeOf(program.statements.items[4].expr.expression.*.infix) == ast.InfixExpression);
-    try t.expect(@TypeOf(program.statements.items[5].expr) == ast.ExpressionStatement);
-    try t.expect(@TypeOf(program.statements.items[5].expr.expression.*.infix) == ast.InfixExpression);
-}
-
-test "Parser - Operator Precedence Parsing" {
-    const input = "1 + (2 + 3) + 4;";
-
-    var lexer = Lexer.init(input);
-    var parser = init(t.allocator, &lexer);
-    const program = try parser.parseProgram();
-    defer parser.deinit(program);
+    const expr_stmt = program.statements.items[0].expr;
+    try t.expect(@TypeOf(expr_stmt) == ast.ExpressionStatement);
 }

@@ -22,12 +22,14 @@ pub const Statement = union(enum) {
     let: LetStatement,
     ret: ReturnStatement,
     expr: ExpressionStatement,
+    block: BlockStatement,
 
     pub fn toString(self: Statement, allocator: Allocator) []const u8 {
         return switch (self) {
             .let => |s| s.toString(allocator),
             .ret => |s| s.toString(allocator),
             .expr => |s| s.toString(allocator),
+            .block => |s| s.toString(allocator),
         };
     }
 };
@@ -39,6 +41,7 @@ pub const Expression = union(enum) {
     boolean: BooleanLiteral,
     prefix: PrefixExpression,
     infix: InfixExpression,
+    if_: IfExpression,
 
     pub fn toString(self: Expression, allocator: Allocator) []const u8 {
         return switch (self) {
@@ -47,6 +50,7 @@ pub const Expression = union(enum) {
             .boolean => |boolean| boolean.toString(),
             .prefix => |prefix| prefix.toString(allocator),
             .infix => |infix| infix.toString(allocator),
+            .if_ => |if_| if_.toString(allocator),
         };
     }
 };
@@ -79,13 +83,13 @@ pub const Program = struct {
         for (self.statements.items) |stmt| {
             switch (stmt) {
                 .expr => |expr_stmt| {
-                    std.debug.print("ExpressionStatement deinit.\n", .{});
                     switch (expr_stmt.expression.*) {
                         .prefix => |prefix| prefix.deinit(allocator),
                         .infix => |infix| infix.deinit(allocator),
                         .identifier => {},
                         .integer => {},
                         .boolean => {},
+                        .if_ => |if_| if_.deinit(allocator),
                     }
 
                     expr_stmt.deinit(allocator);
@@ -179,7 +183,7 @@ pub const InfixExpression = struct {
 
     pub fn toString(self: InfixExpression, allocator: Allocator) []const u8 {
         return std.fmt.allocPrint(allocator, "{s} {s} {s}", .{
-            self.right.toString(allocator),
+            self.left.toString(allocator),
             self.operator.toString(),
             self.right.toString(allocator),
         }) catch unreachable;
@@ -188,6 +192,83 @@ pub const InfixExpression = struct {
     pub fn deinit(self: InfixExpression, allocator: Allocator) void {
         allocator.destroy(self.left);
         allocator.destroy(self.right);
+    }
+};
+
+pub const IfExpression = struct {
+    token: Token,
+    condition: *Expression,
+    consequence: BlockStatement,
+    alternative: ?BlockStatement,
+
+    pub fn toString(self: IfExpression, allocator: Allocator) []const u8 {
+        var str = std.fmt.allocPrint(
+            allocator,
+            "if ({s}) {{ {s} }}",
+            .{
+                self.condition.toString(allocator),
+                self.consequence.toString(allocator),
+            },
+        ) catch unreachable;
+
+        if (self.alternative != null) {
+            str = std.fmt.allocPrint(
+                allocator,
+                "{s} else {{ {s} }}",
+                .{
+                    str,
+                    self.alternative.?.toString(allocator),
+                },
+            ) catch unreachable;
+        }
+
+        return str;
+    }
+
+    pub fn deinit(_: IfExpression, _: Allocator) void {
+        // allocator.free(self.condition);
+        // self.consequence.deinit(allocator);
+        // self.alternative.deinit(allocator);
+    }
+};
+
+pub const BlockStatement = struct {
+    token: Token,
+    statements: std.ArrayList(Statement),
+
+    pub fn toString(self: BlockStatement, allocator: Allocator) []const u8 {
+        var buf = std.ArrayList(u8).init(allocator);
+        var i: usize = 0;
+        while (i < self.statements.items.len) : (i += 1) {
+            const stmt = self.statements.items[i];
+            const stmt_str = stmt.toString(allocator);
+            // defer allocator.free(stmt_str);
+            buf.appendSlice(stmt_str) catch unreachable;
+        }
+        return buf.toOwnedSlice() catch unreachable;
+    }
+
+    pub fn deinit(_: BlockStatement, _: Allocator) void {
+        // for (self.statements.items) |stmt| {
+        //     switch (stmt) {
+        //         .expr => |expr_stmt| {
+        //             std.debug.print("ExpressionStatement deinit.\n", .{});
+        //             switch (expr_stmt.expression.*) {
+        //                 .prefix => |prefix| prefix.deinit(allocator),
+        //                 .infix => |infix| infix.deinit(allocator),
+        //                 .identifier => {},
+        //                 .integer => {},
+        //                 .boolean => {},
+        //                 .if_ => |if_| if_.deinit(allocator),
+        //             }
+
+        //             expr_stmt.deinit(allocator);
+        //         },
+        //         else => {},
+        //     }
+        // }
+
+        // self.statements.deinit();
     }
 };
 
@@ -267,4 +348,143 @@ test "AST - toString" {
     );
 
     t.allocator.free(str);
+}
+
+test "IfExpression - toString()" {
+    var left = Expression{
+        .identifier = Identifier{
+            .token = Token{ .ident = "x" },
+            .value = "x",
+        },
+    };
+    var right = Expression{
+        .identifier = Identifier{
+            .token = Token{ .ident = "y" },
+            .value = "y",
+        },
+    };
+
+    var consequences = std.ArrayList(Statement).init(t.allocator);
+    defer consequences.deinit();
+    try consequences.append(Statement{
+        .let = LetStatement{
+            .token = .let,
+            .name = Identifier{
+                .token = Token{ .ident = "foobar" },
+                .value = "foobar",
+            },
+            .value = Expression{
+                .integer = IntegerLiteral{
+                    .token = Token{ .int = "10" },
+                    .value = 10,
+                },
+            },
+        },
+    });
+    var alternatives = std.ArrayList(Statement).init(t.allocator);
+    defer alternatives.deinit();
+    try alternatives.append(
+        Statement{
+            .ret = ReturnStatement{
+                .token = .return_,
+                .value = Expression{
+                    .integer = IntegerLiteral{
+                        .token = Token{ .int = "0" },
+                        .value = 0,
+                    },
+                },
+            },
+        },
+    );
+
+    var condition = Expression{
+        .infix = InfixExpression{
+            .token = .lt,
+            .left = &left,
+            .operator = .lt,
+            .right = &right,
+        },
+    };
+    const ifExpr = IfExpression{
+        .token = .if_,
+        .condition = &condition,
+        .consequence = BlockStatement{
+            .token = .assign,
+            .statements = consequences,
+        },
+        .alternative = BlockStatement{
+            .token = .assign,
+            .statements = alternatives,
+        },
+    };
+
+    const str = ifExpr.toString(t.allocator);
+    defer t.allocator.free(str);
+    std.debug.print("{s}\n", .{str});
+    try t.expect(std.mem.eql(
+        u8,
+        str,
+        "if (x < y) { let foobar = 10; } else { return 0; }",
+    ));
+}
+
+test "IfExpression - toString() w/o alternative" {
+    var left = Expression{
+        .identifier = Identifier{
+            .token = Token{ .ident = "x" },
+            .value = "x",
+        },
+    };
+    var right = Expression{
+        .identifier = Identifier{
+            .token = Token{ .ident = "y" },
+            .value = "y",
+        },
+    };
+
+    var condition = Expression{
+        .infix = InfixExpression{
+            .token = .lt,
+            .left = &left,
+            .operator = .lt,
+            .right = &right,
+        },
+    };
+    var consequences = std.ArrayList(Statement).init(t.allocator);
+    defer consequences.deinit();
+    try consequences.append(Statement{
+        .let = LetStatement{
+            .token = .let,
+            .name = Identifier{
+                .token = Token{ .ident = "foobar" },
+                .value = "foobar",
+            },
+            .value = Expression{
+                .integer = IntegerLiteral{
+                    .token = Token{ .int = "10" },
+                    .value = 10,
+                },
+            },
+        },
+    });
+    var alternatives = std.ArrayList(Statement).init(t.allocator);
+    defer alternatives.deinit();
+
+    const ifExpr = IfExpression{
+        .token = .if_,
+        .condition = &condition,
+        .consequence = BlockStatement{
+            .token = .assign,
+            .statements = consequences,
+        },
+        .alternative = null,
+    };
+
+    const str = ifExpr.toString(t.allocator);
+    std.debug.print("{s}\n", .{str});
+    try t.expect(std.mem.eql(
+        u8,
+        str,
+        "if (x < y) { let foobar = 10; }",
+    ));
 }
