@@ -1,6 +1,7 @@
 const std = @import("std");
 const Token = @import("token.zig").Token;
 const Allocator = @import("std").mem.Allocator;
+const String = @import("string.zig").String;
 
 ///
 pub const Node = union(enum) {
@@ -8,11 +9,11 @@ pub const Node = union(enum) {
     statement: *Statement,
     expression: *Expression,
 
-    pub fn toString(self: Node, allocator: Allocator) []const u8 {
+    pub fn toString(self: Node, str: *String) !void {
         return switch (self.*) {
-            .program => |p| p.toString(allocator),
-            .statement => |s| s.toString(allocator),
-            .expression => |s| s.toString(allocator),
+            .program => |p| p.toString(str),
+            .statement => |s| s.toString(str),
+            .expression => |s| s.toString(str),
         };
     }
 };
@@ -24,12 +25,12 @@ pub const Statement = union(enum) {
     expr: ExpressionStatement,
     block: BlockStatement,
 
-    pub fn toString(self: Statement, allocator: Allocator) []const u8 {
+    pub fn toString(self: Statement, str: *String) !void {
         return switch (self) {
-            .let => |s| s.toString(allocator),
-            .ret => |s| s.toString(allocator),
-            .expr => |s| s.toString(allocator),
-            .block => |s| s.toString(allocator),
+            .let => |s| s.toString(str),
+            .ret => |s| s.toString(str),
+            .expr => |s| s.toString(str),
+            .block => |s| s.toString(str),
         };
     }
 };
@@ -43,14 +44,14 @@ pub const Expression = union(enum) {
     infix: InfixExpression,
     if_: IfExpression,
 
-    pub fn toString(self: Expression, allocator: Allocator) []const u8 {
+    pub fn toString(self: Expression, str: *String) !void {
         return switch (self) {
-            .identifier => |ident| ident.toString(),
-            .integer => |integer| integer.toString(allocator),
-            .boolean => |boolean| boolean.toString(),
-            .prefix => |prefix| prefix.toString(allocator),
-            .infix => |infix| infix.toString(allocator),
-            .if_ => |if_| if_.toString(allocator),
+            .identifier => |ident| ident.toString(str),
+            .integer => |integer| integer.toString(str),
+            .boolean => |boolean| boolean.toString(str),
+            .prefix => |prefix| prefix.toString(str),
+            .infix => |infix| infix.toString(str),
+            .if_ => |if_| if_.toString(str),
         };
     }
 };
@@ -59,24 +60,23 @@ pub const Identifier = struct {
     token: Token,
     value: []const u8,
 
-    pub fn toString(self: Identifier) []const u8 {
-        return self.value;
+    pub fn toString(self: Identifier, str: *String) !void {
+        try str.concat(self.value);
     }
 };
 
 pub const Program = struct {
     statements: std.ArrayList(Statement),
 
-    pub fn toString(self: Program, allocator: Allocator) ![]const u8 {
-        var buf = std.ArrayList(u8).init(allocator);
-        var i: usize = 0;
-        while (i < self.statements.items.len) : (i += 1) {
-            const stmt = self.statements.items[i];
-            const stmt_str = stmt.toString(allocator);
-            defer allocator.free(stmt_str);
-            try buf.appendSlice(stmt_str);
+    pub fn toString(self: Program, str: *String) !void {
+        // var i: usize = 0;
+        // while (i < self.statements.items.len) : (i += 1) {
+        //     self.statements.items[i].toString(str);
+        // }
+
+        for (self.statements.items) |stmt| {
+            try stmt.toString(str);
         }
-        return buf.toOwnedSlice();
     }
 
     pub fn deinit(self: Program, allocator: Allocator) void {
@@ -107,12 +107,12 @@ pub const LetStatement = struct {
     name: Identifier,
     value: Expression,
 
-    pub fn toString(self: LetStatement, allocator: Allocator) []const u8 {
-        return std.fmt.allocPrint(allocator, "{s} {s} = {s};", .{
-            "let",
-            self.name.toString(),
-            self.value.toString(allocator),
-        }) catch unreachable;
+    pub fn toString(self: LetStatement, str: *String) !void {
+        try str.concat("let ");
+        try self.name.toString(str);
+        try str.concat(" = ");
+        try self.value.toString(str);
+        try str.concat(";");
     }
 };
 
@@ -120,14 +120,10 @@ pub const ReturnStatement = struct {
     token: Token,
     value: Expression,
 
-    pub fn toString(self: ReturnStatement, allocator: Allocator) []const u8 {
-        const str = self.value.toString(allocator);
-        defer allocator.free(str);
-        return std.fmt.allocPrint(
-            allocator,
-            "{s} {s};",
-            .{ "return", str },
-        ) catch unreachable;
+    pub fn toString(self: ReturnStatement, str: *String) !void {
+        try str.concat("return ");
+        try self.value.toString(str);
+        try str.concat(";");
     }
 };
 
@@ -135,9 +131,8 @@ pub const ExpressionStatement = struct {
     token: Token,
     expression: *Expression,
 
-    pub fn toString(self: ExpressionStatement, allocator: Allocator) []const u8 {
-        const str = self.expression.toString(allocator);
-        return str;
+    pub fn toString(self: ExpressionStatement, str: *String) !void {
+        try self.expression.toString(str);
     }
 
     pub fn deinit(self: ExpressionStatement, allocator: Allocator) void {
@@ -149,12 +144,14 @@ pub const IntegerLiteral = struct {
     token: Token,
     value: i64,
 
-    pub fn toString(self: IntegerLiteral, allocator: Allocator) []const u8 {
-        return std.fmt.allocPrint(
-            allocator,
+    pub fn toString(self: IntegerLiteral, str: *String) !void {
+        var buf: [16]u8 = undefined;
+        const slice = try std.fmt.bufPrint(
+            &buf,
             "{d}",
             .{self.value},
-        ) catch unreachable;
+        );
+        try str.concat(slice);
     }
 };
 
@@ -163,11 +160,9 @@ pub const PrefixExpression = struct {
     operator: Operator,
     right: *Expression,
 
-    pub fn toString(self: PrefixExpression, allocator: Allocator) []const u8 {
-        return std.fmt.allocPrint(allocator, "({s}{s})", .{
-            self.operator.toString(),
-            self.right.toString(allocator),
-        }) catch unreachable;
+    pub fn toString(self: PrefixExpression, str: *String) anyerror!void {
+        try str.concat(self.operator.toString());
+        try self.right.toString(str);
     }
 
     pub fn deinit(self: PrefixExpression, allocator: Allocator) void {
@@ -181,12 +176,12 @@ pub const InfixExpression = struct {
     operator: Operator,
     right: *Expression,
 
-    pub fn toString(self: InfixExpression, allocator: Allocator) []const u8 {
-        return std.fmt.allocPrint(allocator, "{s} {s} {s}", .{
-            self.left.toString(allocator),
-            self.operator.toString(),
-            self.right.toString(allocator),
-        }) catch unreachable;
+    pub fn toString(self: InfixExpression, str: *String) !void {
+        try self.left.toString(str);
+        try str.concat(" ");
+        try str.concat(self.operator.toString());
+        try str.concat(" ");
+        try self.right.toString(str);
     }
 
     pub fn deinit(self: InfixExpression, allocator: Allocator) void {
@@ -201,34 +196,26 @@ pub const IfExpression = struct {
     consequence: BlockStatement,
     alternative: ?BlockStatement,
 
-    pub fn toString(self: IfExpression, allocator: Allocator) []const u8 {
-        var str = std.fmt.allocPrint(
-            allocator,
-            "if ({s}) {{ {s} }}",
-            .{
-                self.condition.toString(allocator),
-                self.consequence.toString(allocator),
-            },
-        ) catch unreachable;
+    pub fn toString(self: IfExpression, str: *String) !void {
+        try str.concat("if (");
+        try self.condition.toString(str);
+        try str.concat(") { ");
+        try self.consequence.toString(str);
+        try str.concat(" }");
 
         if (self.alternative != null) {
-            str = std.fmt.allocPrint(
-                allocator,
-                "{s} else {{ {s} }}",
-                .{
-                    str,
-                    self.alternative.?.toString(allocator),
-                },
-            ) catch unreachable;
+            try str.concat(" else { ");
+            try self.alternative.?.toString(str);
+            try str.concat(" }");
         }
-
-        return str;
     }
 
-    pub fn deinit(_: IfExpression, _: Allocator) void {
-        // allocator.free(self.condition);
-        // self.consequence.deinit(allocator);
-        // self.alternative.deinit(allocator);
+    pub fn deinit(self: IfExpression, allocator: Allocator) void {
+        allocator.destroy(self.condition);
+        self.consequence.deinit(allocator);
+        if (self.alternative != null) {
+            self.alternative.?.deinit(allocator);
+        }
     }
 };
 
@@ -236,16 +223,11 @@ pub const BlockStatement = struct {
     token: Token,
     statements: std.ArrayList(Statement),
 
-    pub fn toString(self: BlockStatement, allocator: Allocator) []const u8 {
-        var buf = std.ArrayList(u8).init(allocator);
+    pub fn toString(self: BlockStatement, str: *String) !void {
         var i: usize = 0;
         while (i < self.statements.items.len) : (i += 1) {
-            const stmt = self.statements.items[i];
-            const stmt_str = stmt.toString(allocator);
-            // defer allocator.free(stmt_str);
-            buf.appendSlice(stmt_str) catch unreachable;
+            try self.statements.items[i].toString(str);
         }
-        return buf.toOwnedSlice() catch unreachable;
     }
 
     pub fn deinit(_: BlockStatement, _: Allocator) void {
@@ -276,8 +258,8 @@ pub const BooleanLiteral = struct {
     token: Token,
     value: bool,
 
-    pub fn toString(self: BooleanLiteral) []const u8 {
-        return if (self.value) "true" else "false";
+    pub fn toString(self: BooleanLiteral, str: *String) !void {
+        try str.concat(if (self.value) "true" else "false");
     }
 };
 
@@ -338,16 +320,10 @@ test "AST - toString" {
     const program = Program{ .statements = statements };
     _ = &program;
 
-    const str = try program.toString(t.allocator);
-    try t.expect(
-        std.mem.eql(
-            u8,
-            str,
-            "let myVar = anotherVar;",
-        ),
-    );
-
-    t.allocator.free(str);
+    var str = String.init(t.allocator);
+    defer str.deinit();
+    try program.toString(&str);
+    try t.expect(str.equal("let myVar = anotherVar;"));
 }
 
 test "IfExpression - toString()" {
@@ -418,14 +394,10 @@ test "IfExpression - toString()" {
         },
     };
 
-    const str = ifExpr.toString(t.allocator);
-    defer t.allocator.free(str);
-    std.debug.print("{s}\n", .{str});
-    try t.expect(std.mem.eql(
-        u8,
-        str,
-        "if (x < y) { let foobar = 10; } else { return 0; }",
-    ));
+    var str = String.init(t.allocator);
+    defer str.deinit();
+    try ifExpr.toString(&str);
+    try t.expect(str.equal("if (x < y) { let foobar = 10; } else { return 0; }"));
 }
 
 test "IfExpression - toString() w/o alternative" {
@@ -480,11 +452,8 @@ test "IfExpression - toString() w/o alternative" {
         .alternative = null,
     };
 
-    const str = ifExpr.toString(t.allocator);
-    std.debug.print("{s}\n", .{str});
-    try t.expect(std.mem.eql(
-        u8,
-        str,
-        "if (x < y) { let foobar = 10; }",
-    ));
+    var str = String.init(t.allocator);
+    defer str.deinit();
+    try ifExpr.toString(&str);
+    try t.expect(str.equal("if (x < y) { let foobar = 10; }"));
 }

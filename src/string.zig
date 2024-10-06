@@ -1,7 +1,7 @@
 const std = @import("std");
 const mem = std.mem;
 const Allocator = mem.Allocator;
-const String = struct {
+pub const String = struct {
     buffer: std.ArrayList(u8),
     len: usize,
 

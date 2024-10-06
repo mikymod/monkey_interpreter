@@ -5,6 +5,7 @@ const Token = @import("token.zig").Token;
 const TokenType = @import("token.zig").TokenType;
 const ast = @import("ast.zig");
 const Operator = ast.Operator;
+const String = @import("string.zig").String;
 
 const Self = @This();
 
@@ -167,7 +168,6 @@ pub fn parseExpressionStatement(self: *Self) !ast.ExpressionStatement {
 pub fn parseExpression(self: *Self, precedence: ExprPrecedence) ParserError!ast.Expression {
     var expr = self.parseExpressionByPrefix(self.cur_token) catch return ParserError.ExpectExpression;
 
-    // const peek_precedence = self.peekPrecedence();
     while (!self.peekTokenIs(.semicolon) and @intFromEnum(precedence) < @intFromEnum(self.peekPrecedence())) {
         const exprPtr = self.allocator.create(ast.Expression) catch return ParserError.MemoryAllocation;
         exprPtr.* = expr;
@@ -258,7 +258,9 @@ fn parseIfExpression(self: *Self) !ast.IfExpression {
     try self.expectPeek(.lparen);
 
     self.nextToken();
-    var condition = try self.parseExpression(.lowest);
+    const condition = try self.parseExpression(.lowest);
+    const conditionPtr = self.allocator.create(ast.Expression) catch return ParserError.MemoryAllocation;
+    conditionPtr.* = condition;
 
     try self.expectPeek(.rparen);
     try self.expectPeek(.lbrace);
@@ -274,7 +276,7 @@ fn parseIfExpression(self: *Self) !ast.IfExpression {
 
     return ast.IfExpression{
         .token = token,
-        .condition = &condition,
+        .condition = conditionPtr,
         .consequence = consequence,
         .alternative = alternative,
     };
@@ -545,6 +547,11 @@ test "Parser - Test if expression" {
 
     try t.expect(program.statements.items.len == 1);
 
+    var str = String.init(t.allocator);
+    defer str.deinit();
+    try program.toString(&str);
+    try t.expect(str.equal("if (x < y) { x }"));
+
     // const expr_stmt = program.statements.items[0];
     // try t.expect(@TypeOf(expr_stmt) == ast.ExpressionStatement);
 
@@ -560,9 +567,10 @@ test "Parser - Test if else expression" {
     const program = try parser.parseProgram();
     defer parser.deinit(program);
 
-    const program_str = try program.toString(t.allocator);
-    defer t.allocator.free(program_str);
-    std.debug.print("{s}\n", .{program_str});
+    var str = String.init(t.allocator);
+    defer str.deinit();
+    try program.toString(&str);
+    // defer t.allocator.free(program_str);
 
     try t.expect(program.statements.items.len == 1);
 
