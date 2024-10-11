@@ -33,6 +33,14 @@ pub const Statement = union(enum) {
             .block => |s| s.toString(str),
         };
     }
+
+    pub fn deinit(self: Statement, allocator: Allocator) void {
+        switch (self) {
+            .expr => |s| s.deinit(allocator),
+            .block => |s| s.deinit(allocator),
+            else => {},
+        }
+    }
 };
 
 ///
@@ -53,6 +61,15 @@ pub const Expression = union(enum) {
             .infix => |infix| infix.toString(str),
             .if_ => |if_| if_.toString(str),
         };
+    }
+
+    pub fn deinit(self: Expression, allocator: Allocator) void {
+        switch (self) {
+            .prefix => |prefix| prefix.deinit(allocator),
+            .infix => |infix| infix.deinit(allocator),
+            .if_ => |if_| if_.deinit(allocator),
+            else => {},
+        }
     }
 };
 
@@ -86,10 +103,10 @@ pub const Program = struct {
                     switch (expr_stmt.expression.*) {
                         .prefix => |prefix| prefix.deinit(allocator),
                         .infix => |infix| infix.deinit(allocator),
+                        .if_ => |if_| if_.deinit(allocator),
                         .identifier => {},
                         .integer => {},
                         .boolean => {},
-                        .if_ => |if_| if_.deinit(allocator),
                     }
 
                     expr_stmt.deinit(allocator);
@@ -230,27 +247,24 @@ pub const BlockStatement = struct {
         }
     }
 
-    pub fn deinit(_: BlockStatement, _: Allocator) void {
-        // for (self.statements.items) |stmt| {
-        //     switch (stmt) {
-        //         .expr => |expr_stmt| {
-        //             std.debug.print("ExpressionStatement deinit.\n", .{});
-        //             switch (expr_stmt.expression.*) {
-        //                 .prefix => |prefix| prefix.deinit(allocator),
-        //                 .infix => |infix| infix.deinit(allocator),
-        //                 .identifier => {},
-        //                 .integer => {},
-        //                 .boolean => {},
-        //                 .if_ => |if_| if_.deinit(allocator),
-        //             }
+    pub fn deinit(self: BlockStatement, allocator: Allocator) void {
+        for (self.statements.items) |stmt| {
+            switch (stmt) {
+                .expr => |expr_stmt| {
+                    switch (expr_stmt.expression.*) {
+                        .prefix => |prefix| prefix.deinit(allocator),
+                        .infix => |infix| infix.deinit(allocator),
+                        .identifier => {},
+                        .integer => {},
+                        .boolean => {},
+                        .if_ => |if_| if_.deinit(allocator),
+                    }
 
-        //             expr_stmt.deinit(allocator);
-        //         },
-        //         else => {},
-        //     }
-        // }
-
-        // self.statements.deinit();
+                    expr_stmt.deinit(allocator);
+                },
+                else => {},
+            }
+        }
     }
 };
 
