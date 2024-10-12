@@ -67,11 +67,6 @@ pub fn init(allocator: Allocator, lexer: *Lexer) Self {
     return parser;
 }
 
-pub fn deinit(self: Self, program: ast.Program) void {
-    program.deinit(self.allocator);
-    self.errors.deinit();
-}
-
 pub fn nextToken(self: *Self) void {
     self.cur_token = self.peek_token;
     self.peek_token = self.lexer.nextToken();
@@ -381,10 +376,13 @@ test "Program - Let statements" {
         \\let foobar = 1000;
     ;
 
+    var arena = std.heap.ArenaAllocator.init(t.allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
     var lexer = Lexer.init(input);
-    var parser = init(t.allocator, &lexer);
+    var parser = init(arena_allocator, &lexer);
     const program = try parser.parseProgram();
-    defer parser.deinit(program);
 
     try std.testing.expect(program.statements.items.len == 3);
     try std.testing.expect(parser.errors.items.len == 0);
@@ -394,20 +392,23 @@ test "Program - Let statements" {
     }
 }
 
-// test "Program - Parser errors" {
-//     const input =
-//         \\let five = 5;
-//         \\let ten = 10;
-//         \\let 2345235;
-//     ;
+test "Program - Parser errors" {
+    const input =
+        \\let five = 5;
+        \\let ten = 10;
+        \\let 2345235;
+    ;
 
-//     var lexer = Lexer.init(input);
-//     var parser = init(t.allocator, &lexer);
-//     const program = parser.parseProgram();
-//     defer parser.deinit(program);
+    var arena = std.heap.ArenaAllocator.init(t.allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
 
-//     try t.expectError(ParserError.ExpectPeek, program);
-// }
+    var lexer = Lexer.init(input);
+    var parser = init(arena_allocator, &lexer);
+    const program = parser.parseProgram();
+
+    try t.expectError(ParserError.ExpectPeek, program);
+}
 
 test "Parser - Return statement" {
     const input =
@@ -416,33 +417,42 @@ test "Parser - Return statement" {
         \\return 993322;
     ;
 
+    var arena = std.heap.ArenaAllocator.init(t.allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
     var lexer = Lexer.init(input);
-    var parser = init(t.allocator, &lexer);
+    var parser = init(arena_allocator, &lexer);
     const program = try parser.parseProgram();
-    defer parser.deinit(program);
 
     try std.testing.expect(program.statements.items.len == 3);
 }
 
-// test "Parser - Parse Identifier" {
-//     const input = "foobar;";
+test "Parser - Parse Identifier" {
+    const input = "foobar;";
 
-//     var lexer = Lexer.init(input);
-//     var parser = init(t.allocator, &lexer);
-//     const program = try parser.parseProgram();
-//     defer parser.deinit(program);
+    var arena = std.heap.ArenaAllocator.init(t.allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
 
-//     try std.testing.expect(program.statements.items.len == 1);
-//     try std.testing.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
-// }
+    var lexer = Lexer.init(input);
+    var parser = init(arena_allocator, &lexer);
+    const program = try parser.parseProgram();
+
+    try std.testing.expect(program.statements.items.len == 1);
+    try std.testing.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
+}
 
 test "Parser - Parse Integer Literal" {
     const input = "5;";
 
+    var arena = std.heap.ArenaAllocator.init(t.allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
     var lexer = Lexer.init(input);
-    var parser = init(t.allocator, &lexer);
+    var parser = init(arena_allocator, &lexer);
     const program = try parser.parseProgram();
-    defer parser.deinit(program);
 
     try std.testing.expect(program.statements.items.len == 1);
 
@@ -453,10 +463,13 @@ test "Parser - Parse Integer Literal" {
 test "Parser - Parse Prefix Expression" {
     const input = "-5;";
 
+    var arena = std.heap.ArenaAllocator.init(t.allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
     var lexer = Lexer.init(input);
-    var parser = init(t.allocator, &lexer);
+    var parser = init(arena_allocator, &lexer);
     const program = try parser.parseProgram();
-    defer parser.deinit(program);
 
     try std.testing.expect(program.statements.items.len == 1);
 
@@ -477,89 +490,100 @@ test "Parser - Parse Infix Expression" {
         \\-a * b;
     ;
 
-    var lexer = Lexer.init(input);
-    var parser = init(t.allocator, &lexer);
-    const program = try parser.parseProgram();
-    defer parser.deinit(program);
+    var arena = std.heap.ArenaAllocator.init(t.allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
 
-    // try std.testing.expect(program.statements.items.len == 9);
+    var lexer = Lexer.init(input);
+    var parser = init(arena_allocator, &lexer);
+    const program = try parser.parseProgram();
+
+    try t.expect(program.statements.items.len == 9);
 }
 
-// test "Parser - Test boolean literals" {
-//     const input =
-//         \\true;
-//         \\false;
-//         \\true == true;
-//         \\false != true;
-//         \\false == false;
-//         \\3 > 5 == false;
-//     ;
+test "Parser - Test boolean literals" {
+    const input =
+        \\true;
+        \\false;
+        \\true == true;
+        \\false != true;
+        \\false == false;
+        \\3 > 5 == false;
+    ;
 
-//     var lexer = Lexer.init(input);
-//     var parser = init(t.allocator, &lexer);
-//     const program = try parser.parseProgram();
-//     defer parser.deinit(program);
+    var arena = std.heap.ArenaAllocator.init(t.allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
 
-//     try t.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
-//     try t.expect(@TypeOf(program.statements.items[0].expr.expression.*.boolean) == ast.BooleanLiteral);
-//     try t.expect(@TypeOf(program.statements.items[1].expr) == ast.ExpressionStatement);
-//     try t.expect(@TypeOf(program.statements.items[1].expr.expression.*.boolean) == ast.BooleanLiteral);
-//     try t.expect(@TypeOf(program.statements.items[2].expr) == ast.ExpressionStatement);
-//     try t.expect(@TypeOf(program.statements.items[2].expr.expression.*.infix) == ast.InfixExpression);
-//     try t.expect(@TypeOf(program.statements.items[3].expr) == ast.ExpressionStatement);
-//     try t.expect(@TypeOf(program.statements.items[3].expr.expression.*.infix) == ast.InfixExpression);
-//     try t.expect(@TypeOf(program.statements.items[4].expr) == ast.ExpressionStatement);
-//     try t.expect(@TypeOf(program.statements.items[4].expr.expression.*.infix) == ast.InfixExpression);
-//     try t.expect(@TypeOf(program.statements.items[5].expr) == ast.ExpressionStatement);
-//     try t.expect(@TypeOf(program.statements.items[5].expr.expression.*.infix) == ast.InfixExpression);
-// }
+    var lexer = Lexer.init(input);
+    var parser = init(arena_allocator, &lexer);
+    const program = try parser.parseProgram();
 
-// test "Parser - Operator Precedence Parsing" {
-//     const input = "1 + (2 + 3) + 4;";
+    try t.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
+    try t.expect(@TypeOf(program.statements.items[0].expr.expression.*.boolean) == ast.BooleanLiteral);
+    try t.expect(@TypeOf(program.statements.items[1].expr) == ast.ExpressionStatement);
+    try t.expect(@TypeOf(program.statements.items[1].expr.expression.*.boolean) == ast.BooleanLiteral);
+    try t.expect(@TypeOf(program.statements.items[2].expr) == ast.ExpressionStatement);
+    try t.expect(@TypeOf(program.statements.items[2].expr.expression.*.infix) == ast.InfixExpression);
+    try t.expect(@TypeOf(program.statements.items[3].expr) == ast.ExpressionStatement);
+    try t.expect(@TypeOf(program.statements.items[3].expr.expression.*.infix) == ast.InfixExpression);
+    try t.expect(@TypeOf(program.statements.items[4].expr) == ast.ExpressionStatement);
+    try t.expect(@TypeOf(program.statements.items[4].expr.expression.*.infix) == ast.InfixExpression);
+    try t.expect(@TypeOf(program.statements.items[5].expr) == ast.ExpressionStatement);
+    try t.expect(@TypeOf(program.statements.items[5].expr.expression.*.infix) == ast.InfixExpression);
+}
 
-//     var lexer = Lexer.init(input);
-//     var parser = init(t.allocator, &lexer);
-//     const program = try parser.parseProgram();
-//     defer parser.deinit(program);
-// }
+test "Parser - Operator Precedence Parsing" {
+    const input = "1 + (2 + 3) + 4;";
 
-// test "Parser - Test if expression" {
-//     const input = "if (x < y) { x }";
+    var arena = std.heap.ArenaAllocator.init(t.allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
 
-//     var lexer = Lexer.init(input);
-//     var parser = init(t.allocator, &lexer);
-//     const program = try parser.parseProgram();
-//     defer parser.deinit(program);
+    var lexer = Lexer.init(input);
+    var parser = init(arena_allocator, &lexer);
+    const program = try parser.parseProgram();
+    _ = &program;
+}
 
-//     try t.expect(program.statements.items.len == 1);
+test "Parser - Test if expression" {
+    const input = "if (x < y) { x }";
 
-//     var str = String.init(t.allocator);
-//     defer str.deinit();
-//     try program.toString(&str);
-//     try t.expect(str.equal("if (x < y) { x }"));
+    var arena = std.heap.ArenaAllocator.init(t.allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
 
-//     // const expr_stmt = program.statements.items[0];
-//     // try t.expect(@TypeOf(expr_stmt) == ast.ExpressionStatement);
+    var lexer = Lexer.init(input);
+    var parser = init(arena_allocator, &lexer);
+    const program = try parser.parseProgram();
 
-//     // const if_expr = expr_stmt.expression.*;
-//     // try t.expect(@TypeOf(if_expr) == ast.IfExpression);
-// }
+    try t.expect(program.statements.items.len == 1);
 
-// test "Parser - Test if else expression" {
-//     const input = "if (x < y) { x } else { y }";
+    try t.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
 
-//     var lexer = Lexer.init(input);
-//     var parser = init(t.allocator, &lexer);
-//     const program = try parser.parseProgram();
-//     defer parser.deinit(program);
+    var str = String.init(t.allocator);
+    defer str.deinit();
+    try program.toString(&str);
+    try t.expect(str.equal("if (x < y) { x }"));
+}
 
-//     var str = String.init(t.allocator);
-//     defer str.deinit();
-//     try program.toString(&str);
-//     // defer t.allocator.free(program_str);
+test "Parser - Test if else expression" {
+    const input = "if (x < y) { x } else { y }";
 
-//     try t.expect(program.statements.items.len == 1);
+    var arena = std.heap.ArenaAllocator.init(t.allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
 
-//     const expr_stmt = program.statements.items[0].expr;
-//     try t.expect(@TypeOf(expr_stmt) == ast.ExpressionStatement);
-// }
+    var lexer = Lexer.init(input);
+    var parser = init(arena_allocator, &lexer);
+    const program = try parser.parseProgram();
+
+    try t.expect(program.statements.items.len == 1);
+    const expr_stmt = program.statements.items[0].expr;
+    try t.expect(@TypeOf(expr_stmt) == ast.ExpressionStatement);
+
+    var str = String.init(t.allocator);
+    defer str.deinit();
+    try program.toString(&str);
+    try t.expect(str.equal("if (x < y) { x } else { y }"));
+}

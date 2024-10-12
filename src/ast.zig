@@ -33,14 +33,6 @@ pub const Statement = union(enum) {
             .block => |s| s.toString(str),
         };
     }
-
-    pub fn deinit(self: Statement, allocator: Allocator) void {
-        switch (self) {
-            .expr => |s| s.deinit(allocator),
-            .block => |s| s.deinit(allocator),
-            else => {},
-        }
-    }
 };
 
 ///
@@ -62,15 +54,6 @@ pub const Expression = union(enum) {
             .if_ => |if_| if_.toString(str),
         };
     }
-
-    pub fn deinit(self: Expression, allocator: Allocator) void {
-        switch (self) {
-            .prefix => |prefix| prefix.deinit(allocator),
-            .infix => |infix| infix.deinit(allocator),
-            .if_ => |if_| if_.deinit(allocator),
-            else => {},
-        }
-    }
 };
 
 pub const Identifier = struct {
@@ -89,27 +72,6 @@ pub const Program = struct {
         for (self.statements.items) |stmt| {
             try stmt.toString(str);
         }
-    }
-
-    pub fn deinit(self: Program, allocator: Allocator) void {
-        for (self.statements.items) |stmt| {
-            switch (stmt) {
-                .expr => |expr_stmt| {
-                    switch (expr_stmt.expression.*) {
-                        .prefix => |prefix| prefix.deinit(allocator),
-                        .infix => |infix| infix.deinit(allocator),
-                        .if_ => |if_| if_.deinit(allocator),
-                        else => {},
-                    }
-
-                    expr_stmt.deinit(allocator);
-                },
-                .block => |block| block.deinit(allocator),
-                else => {},
-            }
-        }
-
-        self.statements.deinit();
     }
 };
 
@@ -145,10 +107,6 @@ pub const ExpressionStatement = struct {
     pub fn toString(self: ExpressionStatement, str: *String) !void {
         try self.expression.toString(str);
     }
-
-    pub fn deinit(self: ExpressionStatement, allocator: Allocator) void {
-        self.expression.deinit(allocator);
-    }
 };
 
 pub const IntegerLiteral = struct {
@@ -175,10 +133,6 @@ pub const PrefixExpression = struct {
         try str.concat(self.operator.toString());
         try self.right.toString(str);
     }
-
-    pub fn deinit(self: PrefixExpression, allocator: Allocator) void {
-        self.right.deinit(allocator);
-    }
 };
 
 pub const InfixExpression = struct {
@@ -193,11 +147,6 @@ pub const InfixExpression = struct {
         try str.concat(self.operator.toString());
         try str.concat(" ");
         try self.right.toString(str);
-    }
-
-    pub fn deinit(self: InfixExpression, allocator: Allocator) void {
-        self.left.deinit(allocator);
-        self.right.deinit(allocator);
     }
 };
 
@@ -220,14 +169,6 @@ pub const IfExpression = struct {
             try str.concat(" }");
         }
     }
-
-    pub fn deinit(self: IfExpression, allocator: Allocator) void {
-        self.condition.deinit(allocator);
-        self.consequence.deinit(allocator);
-        if (self.alternative != null) {
-            self.alternative.?.deinit(allocator);
-        }
-    }
 };
 
 pub const BlockStatement = struct {
@@ -238,24 +179,6 @@ pub const BlockStatement = struct {
         var i: usize = 0;
         while (i < self.statements.items.len) : (i += 1) {
             try self.statements.items[i].toString(str);
-        }
-    }
-
-    pub fn deinit(self: BlockStatement, allocator: Allocator) void {
-        for (self.statements.items) |stmt| {
-            switch (stmt) {
-                .expr => |expr_stmt| {
-                    switch (expr_stmt.expression.*) {
-                        .prefix => |prefix| prefix.deinit(allocator),
-                        .infix => |infix| infix.deinit(allocator),
-                        .if_ => |if_| if_.deinit(allocator),
-                        else => {},
-                    }
-
-                    expr_stmt.deinit(allocator);
-                },
-                else => {},
-            }
         }
     }
 };
