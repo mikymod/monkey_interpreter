@@ -86,11 +86,6 @@ pub const Program = struct {
     statements: std.ArrayList(Statement),
 
     pub fn toString(self: Program, str: *String) !void {
-        // var i: usize = 0;
-        // while (i < self.statements.items.len) : (i += 1) {
-        //     self.statements.items[i].toString(str);
-        // }
-
         for (self.statements.items) |stmt| {
             try stmt.toString(str);
         }
@@ -104,13 +99,12 @@ pub const Program = struct {
                         .prefix => |prefix| prefix.deinit(allocator),
                         .infix => |infix| infix.deinit(allocator),
                         .if_ => |if_| if_.deinit(allocator),
-                        .identifier => {},
-                        .integer => {},
-                        .boolean => {},
+                        else => {},
                     }
 
                     expr_stmt.deinit(allocator);
                 },
+                .block => |block| block.deinit(allocator),
                 else => {},
             }
         }
@@ -153,7 +147,7 @@ pub const ExpressionStatement = struct {
     }
 
     pub fn deinit(self: ExpressionStatement, allocator: Allocator) void {
-        allocator.destroy(self.expression);
+        self.expression.deinit(allocator);
     }
 };
 
@@ -183,7 +177,7 @@ pub const PrefixExpression = struct {
     }
 
     pub fn deinit(self: PrefixExpression, allocator: Allocator) void {
-        allocator.destroy(self.right);
+        self.right.deinit(allocator);
     }
 };
 
@@ -202,8 +196,8 @@ pub const InfixExpression = struct {
     }
 
     pub fn deinit(self: InfixExpression, allocator: Allocator) void {
-        allocator.destroy(self.left);
-        allocator.destroy(self.right);
+        self.left.deinit(allocator);
+        self.right.deinit(allocator);
     }
 };
 
@@ -228,7 +222,7 @@ pub const IfExpression = struct {
     }
 
     pub fn deinit(self: IfExpression, allocator: Allocator) void {
-        allocator.destroy(self.condition);
+        self.condition.deinit(allocator);
         self.consequence.deinit(allocator);
         if (self.alternative != null) {
             self.alternative.?.deinit(allocator);
@@ -254,10 +248,8 @@ pub const BlockStatement = struct {
                     switch (expr_stmt.expression.*) {
                         .prefix => |prefix| prefix.deinit(allocator),
                         .infix => |infix| infix.deinit(allocator),
-                        .identifier => {},
-                        .integer => {},
-                        .boolean => {},
                         .if_ => |if_| if_.deinit(allocator),
+                        else => {},
                     }
 
                     expr_stmt.deinit(allocator);

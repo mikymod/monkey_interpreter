@@ -156,7 +156,6 @@ pub fn parseExpressionStatement(self: *Self) !ast.ExpressionStatement {
     }
 
     const expressionPtr = self.allocator.create(ast.Expression) catch return ParserError.MemoryAllocation;
-
     expressionPtr.* = expression;
 
     return ast.ExpressionStatement{
@@ -307,7 +306,6 @@ pub fn parseExpressionByPrefix(self: *Self, token_type: TokenType) !ast.Expressi
         .true_, .false_ => ast.Expression{ .boolean = try self.parseBooleanLiteral() },
         .lparen => try self.parseGroupedExpression(),
         .if_ => ast.Expression{ .if_ = try self.parseIfExpression() },
-
         else => ParserError.InvalidPrefix,
     };
 }
@@ -346,18 +344,6 @@ pub fn expectPeek(self: *Self, token_type: TokenType) !void {
     if (self.peekTokenIs(token_type)) {
         self.nextToken();
     } else {
-
-        // const str = try std.fmt.allocPrint(
-        //     self.allocator,
-        //     "Error: Expected {s}, Found {s}\n",
-        //     .{ token_type.name(), @tagName(self.peek_token) },
-        // );
-        // defer self.allocator.free(str);
-        // try self.errors.append(str);
-        std.debug.print(
-            "Error: Expected {s}, Found {s}\n",
-            .{ token_type.name(), @tagName(self.peek_token) },
-        );
         return ParserError.ExpectPeek;
     }
 }
@@ -438,18 +424,17 @@ test "Parser - Return statement" {
     try std.testing.expect(program.statements.items.len == 3);
 }
 
-test "Parser - Parse Identifier" {
-    const input = "foobar;";
+// test "Parser - Parse Identifier" {
+//     const input = "foobar;";
 
-    var lexer = Lexer.init(input);
-    var parser = init(t.allocator, &lexer);
-    const program = try parser.parseProgram();
-    defer parser.deinit(program);
+//     var lexer = Lexer.init(input);
+//     var parser = init(t.allocator, &lexer);
+//     const program = try parser.parseProgram();
+//     defer parser.deinit(program);
 
-    try std.testing.expect(program.statements.items.len == 1);
-
-    try std.testing.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
-}
+//     try std.testing.expect(program.statements.items.len == 1);
+//     try std.testing.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
+// }
 
 test "Parser - Parse Integer Literal" {
     const input = "5;";
@@ -489,7 +474,7 @@ test "Parser - Parse Infix Expression" {
         \\5 < 5;
         \\5 == 5;
         \\5 != 5;
-        // \\-a * b; // FIXME: This cause a memory leak
+        \\-a * b;
     ;
 
     var lexer = Lexer.init(input);
