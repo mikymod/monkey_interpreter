@@ -43,6 +43,7 @@ pub const Expression = union(enum) {
     prefix: PrefixExpression,
     infix: InfixExpression,
     if_: IfExpression,
+    function: FunctionLiteral,
 
     pub fn toString(self: Expression, str: *String) !void {
         return switch (self) {
@@ -52,6 +53,7 @@ pub const Expression = union(enum) {
             .prefix => |prefix| prefix.toString(str),
             .infix => |infix| infix.toString(str),
             .if_ => |if_| if_.toString(str),
+            .function => |function| function.toString(str),
         };
     }
 };
@@ -159,14 +161,12 @@ pub const IfExpression = struct {
     pub fn toString(self: IfExpression, str: *String) !void {
         try str.concat("if (");
         try self.condition.toString(str);
-        try str.concat(") { ");
+        try str.concat(") ");
         try self.consequence.toString(str);
-        try str.concat(" }");
 
         if (self.alternative != null) {
-            try str.concat(" else { ");
+            try str.concat(" else ");
             try self.alternative.?.toString(str);
-            try str.concat(" }");
         }
     }
 };
@@ -177,9 +177,11 @@ pub const BlockStatement = struct {
 
     pub fn toString(self: BlockStatement, str: *String) !void {
         var i: usize = 0;
+        try str.concat("{ ");
         while (i < self.statements.items.len) : (i += 1) {
             try self.statements.items[i].toString(str);
         }
+        try str.concat(" }");
     }
 };
 
@@ -189,6 +191,26 @@ pub const BooleanLiteral = struct {
 
     pub fn toString(self: BooleanLiteral, str: *String) !void {
         try str.concat(if (self.value) "true" else "false");
+    }
+};
+
+///
+pub const FunctionLiteral = struct {
+    token: Token,
+    params: std.ArrayList(Identifier),
+    body: BlockStatement,
+
+    pub fn toString(self: FunctionLiteral, str: *String) !void {
+        try str.concat("fn(");
+        for (self.params.items) |param| {
+            try param.toString(str);
+            // TODO: from here
+            if (!std.meta.eql(param, self.params.getLast())) {
+                try str.concat(", ");
+            }
+        }
+        try str.concat(") ");
+        try self.body.toString(str);
     }
 };
 
@@ -385,4 +407,38 @@ test "IfExpression - toString() w/o alternative" {
     defer str.deinit();
     try ifExpr.toString(&str);
     try t.expect(str.equal("if (x < y) { let foobar = 10; }"));
+}
+
+test "FunctionLiteral - toString" {
+    var params = std.ArrayList(Identifier).init(t.allocator);
+    defer params.deinit();
+
+    try params.append(Identifier{
+        .token = Token{ .ident = "x" },
+        .value = "x",
+    });
+    try params.append(Identifier{
+        .token = Token{ .ident = "y" },
+        .value = "y",
+    });
+
+    const body_statements = std.ArrayList(Statement).init(t.allocator);
+    defer body_statements.deinit();
+
+    const body = BlockStatement{
+        .token = .lbrace,
+        .statements = body_statements,
+    };
+
+    const function_literal = FunctionLiteral{
+        .token = .function,
+        .params = params,
+        .body = body,
+    };
+
+    var str = String.init(t.allocator);
+    defer str.deinit();
+
+    try function_literal.toString(&str);
+    try t.expect(str.equal("fn(x, y) {  }"));
 }

@@ -293,6 +293,50 @@ fn parseBlockStatement(self: *Self) !ast.BlockStatement {
     };
 }
 
+fn parseFunctionLiteral(self: *Self) !ast.FunctionLiteral {
+    const token = self.cur_token;
+
+    try self.expectPeek(.lparen);
+
+    const params = try self.parseFunctionParameters();
+
+    try self.expectPeek(.lbrace);
+
+    const body = try self.parseBlockStatement();
+
+    return ast.FunctionLiteral{
+        .token = token,
+        .params = params,
+        .body = body,
+    };
+}
+
+fn parseFunctionParameters(self: *Self) !std.ArrayList(ast.Identifier) {
+    var identifiers = std.ArrayList(ast.Identifier).init(self.allocator);
+
+    if (self.peekTokenIs(.rparen)) {
+        self.nextToken();
+        return identifiers;
+    }
+
+    self.nextToken();
+
+    var ident = try self.parseIdentifier();
+
+    try identifiers.append(ident);
+
+    while (self.peekTokenIs(.comma)) {
+        self.nextToken();
+        self.nextToken();
+        ident = try self.parseIdentifier();
+        try identifiers.append(ident);
+    }
+
+    try self.expectPeek(.rparen);
+
+    return identifiers;
+}
+
 pub fn parseExpressionByPrefix(self: *Self, token_type: TokenType) !ast.Expression {
     return switch (token_type) {
         .ident => ast.Expression{ .identifier = try self.parseIdentifier() },
@@ -301,6 +345,7 @@ pub fn parseExpressionByPrefix(self: *Self, token_type: TokenType) !ast.Expressi
         .true_, .false_ => ast.Expression{ .boolean = try self.parseBooleanLiteral() },
         .lparen => try self.parseGroupedExpression(),
         .if_ => ast.Expression{ .if_ = try self.parseIfExpression() },
+        .function => ast.Expression{ .function = try self.parseFunctionLiteral() },
         else => ParserError.InvalidPrefix,
     };
 }
@@ -586,4 +631,34 @@ test "Parser - Test if else expression" {
     defer str.deinit();
     try program.toString(&str);
     try t.expect(str.equal("if (x < y) { x } else { y }"));
+}
+
+test "Parser - Function expression" {
+    const input = "fn(x, y) { x + y; }";
+
+    var arena = std.heap.ArenaAllocator.init(t.allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
+    var lexer = Lexer.init(input);
+    var parser = init(arena_allocator, &lexer);
+    const program = try parser.parseProgram();
+
+    try t.expect(program.statements.items.len == 1);
+    try t.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
+}
+
+test "Parser - Let Function expression" {
+    const input = "let foo = fn(x, y) { x + y; }";
+
+    var arena = std.heap.ArenaAllocator.init(t.allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
+    var lexer = Lexer.init(input);
+    var parser = init(arena_allocator, &lexer);
+    const program = try parser.parseProgram();
+
+    try t.expect(program.statements.items.len == 1);
+    try t.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
 }
