@@ -44,6 +44,7 @@ pub const Expression = union(enum) {
     infix: InfixExpression,
     if_: IfExpression,
     function: FunctionLiteral,
+    call: CallExpression,
 
     pub fn toString(self: Expression, str: *String) !void {
         return switch (self) {
@@ -54,6 +55,7 @@ pub const Expression = union(enum) {
             .infix => |infix| infix.toString(str),
             .if_ => |if_| if_.toString(str),
             .function => |function| function.toString(str),
+            .call => |call| call.toString(str),
         };
     }
 };
@@ -202,15 +204,33 @@ pub const FunctionLiteral = struct {
 
     pub fn toString(self: FunctionLiteral, str: *String) !void {
         try str.concat("fn(");
-        for (self.params.items) |param| {
+        for (self.params.items, 0..) |param, index| {
             try param.toString(str);
-            // TODO: from here
-            if (!std.meta.eql(param, self.params.getLast())) {
+            if (index < self.params.items.len - 1) {
                 try str.concat(", ");
             }
         }
         try str.concat(") ");
         try self.body.toString(str);
+    }
+};
+
+///
+pub const CallExpression = struct {
+    token: Token,
+    function: *Expression, // Identifier or FunctionLiteral
+    args: std.ArrayList(Expression),
+
+    pub fn toString(self: CallExpression, str: *String) !void {
+        try self.function.toString(str);
+        try str.concat("(");
+        for (self.args.items, 0..) |arg, index| {
+            try arg.toString(str);
+            if (index < self.args.items.len - 1) {
+                try str.concat(", ");
+            }
+        }
+        try str.concat(");");
     }
 };
 
@@ -441,4 +461,41 @@ test "FunctionLiteral - toString" {
 
     try function_literal.toString(&str);
     try t.expect(str.equal("fn(x, y) {  }"));
+}
+
+test "CallExpression - toString" {
+    var expr = Expression{
+        .identifier = Identifier{
+            .token = Token{ .ident = "foo" },
+            .value = "foo",
+        },
+    };
+
+    var args = std.ArrayList(Expression).init(t.allocator);
+    defer args.deinit();
+
+    try args.append(Expression{
+        .identifier = Identifier{
+            .token = Token{ .ident = "x" },
+            .value = "x",
+        },
+    });
+    try args.append(Expression{
+        .identifier = Identifier{
+            .token = Token{ .ident = "y" },
+            .value = "y",
+        },
+    });
+
+    const call_expr = CallExpression{
+        .token = Token{ .ident = "foo" },
+        .function = &expr,
+        .args = args,
+    };
+
+    var str = String.init(t.allocator);
+    defer str.deinit();
+
+    try call_expr.toString(&str);
+    try t.expect(str.equal("foo(x, y);"));
 }

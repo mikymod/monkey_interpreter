@@ -220,7 +220,7 @@ fn parsePrefixExpression(self: *Self) ParserError!ast.PrefixExpression {
     };
 }
 
-fn parseInfixExpression(self: *Self, left: *ast.Expression) ParserError!ast.InfixExpression {
+fn parseInfixExpression(self: *Self, left: *ast.Expression) !ast.InfixExpression {
     const token = self.cur_token;
     const operator = try getOperatorFromToken(self.cur_token);
     const precedence = self.currentPrecedence();
@@ -337,6 +337,40 @@ fn parseFunctionParameters(self: *Self) !std.ArrayList(ast.Identifier) {
     return identifiers;
 }
 
+fn parseCallExpression(self: *Self, function: *ast.Expression) !ast.CallExpression {
+    const token = self.cur_token;
+    const args = try self.parseCallArguments();
+    return ast.CallExpression{
+        .token = token,
+        .function = function,
+        .args = args,
+    };
+}
+
+fn parseCallArguments(self: *Self) !std.ArrayList(ast.Expression) {
+    var args = std.ArrayList(ast.Expression).init(self.allocator);
+
+    if (self.peekTokenIs(.rparen)) {
+        self.nextToken();
+        return args;
+    }
+
+    self.nextToken();
+    var expr = try self.parseExpression(.lowest);
+    args.append(expr) catch return ParserError.MemoryAllocation;
+
+    while (self.peekTokenIs(.comma)) {
+        self.nextToken();
+        self.nextToken();
+        expr = try self.parseExpression(.lowest);
+        args.append(expr) catch return ParserError.MemoryAllocation;
+    }
+
+    try self.expectPeek(.rparen);
+
+    return args;
+}
+
 pub fn parseExpressionByPrefix(self: *Self, token_type: TokenType) !ast.Expression {
     return switch (token_type) {
         .ident => ast.Expression{ .identifier = try self.parseIdentifier() },
@@ -353,17 +387,8 @@ pub fn parseExpressionByPrefix(self: *Self, token_type: TokenType) !ast.Expressi
 pub fn parseExpressionByInfix(self: *Self, token_type: TokenType, left: *ast.Expression) !ast.Expression {
     self.nextToken();
     return switch (token_type) {
-        .plus,
-        .minus,
-        .asterisk,
-        .slash,
-        .eq,
-        .notEq,
-        .gt,
-        .lt,
-        => {
-            return ast.Expression{ .infix = try self.parseInfixExpression(left) };
-        },
+        .plus, .minus, .asterisk, .slash, .eq, .notEq, .gt, .lt => return ast.Expression{ .infix = try self.parseInfixExpression(left) },
+        .lparen => ast.Expression{ .call = try self.parseCallExpression(left) },
         else => ParserError.InvalidInfix,
     };
 }
@@ -650,6 +675,36 @@ test "Parser - Function expression" {
 
 test "Parser - Let Function expression" {
     const input = "let foo = fn(x, y) { x + y; }";
+
+    var arena = std.heap.ArenaAllocator.init(t.allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
+    var lexer = Lexer.init(input);
+    var parser = init(arena_allocator, &lexer);
+    const program = try parser.parseProgram();
+
+    try t.expect(program.statements.items.len == 1);
+    try t.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
+}
+
+test "Parser - Identifier CallExpression" {
+    const input = "foo(x, y);";
+
+    var arena = std.heap.ArenaAllocator.init(t.allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
+    var lexer = Lexer.init(input);
+    var parser = init(arena_allocator, &lexer);
+    const program = try parser.parseProgram();
+
+    try t.expect(program.statements.items.len == 1);
+    try t.expect(@TypeOf(program.statements.items[0].expr) == ast.ExpressionStatement);
+}
+
+test "Parser - FunctionLiteral CallExpression" {
+    const input = "fn(x, y) { x + y; } (5, 5);";
 
     var arena = std.heap.ArenaAllocator.init(t.allocator);
     defer arena.deinit();
