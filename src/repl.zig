@@ -1,5 +1,7 @@
 const std = @import("std");
 const Lexer = @import("Lexer.zig");
+const Parser = @import("Parser.zig");
+const String = @import("string.zig").String;
 
 const PROMPT = ">> ";
 
@@ -12,13 +14,18 @@ pub fn start() !void {
         try stdout.print("{s}", .{PROMPT});
         const line = try stdin.readUntilDelimiterOrEof(&buffer, '\r') orelse break;
 
-        var l = Lexer.init(line);
+        var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+        defer arena.deinit();
+        const allocator = arena.allocator();
 
-        while (true) {
-            const t = l.nextToken();
-            if (std.mem.eql(u8, t.literal, "")) break;
-            try stdout.print("{s}\n", .{t.literal});
-            try stdout.print("{}\n", .{t.literal.len});
-        }
+        var lexer = Lexer.init(line);
+        var parser = Parser.init(allocator, &lexer);
+        const program = try parser.parseProgram();
+
+        var str = String.init(std.heap.page_allocator);
+        defer str.deinit();
+        try program.toString(&str);
+        const slice = try str.buffer.toOwnedSlice();
+        try stdout.print("{s}\n", .{slice});
     }
 }
