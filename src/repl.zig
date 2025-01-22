@@ -2,6 +2,9 @@ const std = @import("std");
 const Lexer = @import("Lexer.zig");
 const Parser = @import("Parser.zig");
 const String = @import("string.zig").String;
+const ast = @import("ast.zig");
+const Program = ast.Program;
+const Statement = ast.Statement;
 
 const PROMPT = ">> ";
 
@@ -20,7 +23,17 @@ pub fn start() !void {
 
         var lexer = Lexer.init(line);
         var parser = Parser.init(allocator, &lexer);
-        const program = try parser.parseProgram();
+        const program = parser.parseProgram() catch {
+            if (parser.errors.items.len > 0) {
+                for (parser.errors.items) |err| {
+                    stdout.print("{s}\n", .{err}) catch unreachable;
+                }
+            }
+            return error.ExpectPeek;
+        };
+
+        // errdefer {
+        // }
 
         var str = String.init(std.heap.page_allocator);
         defer str.deinit();

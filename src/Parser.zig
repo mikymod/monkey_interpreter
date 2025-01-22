@@ -409,6 +409,16 @@ pub fn expectPeek(self: *Self, token_type: TokenType) !void {
     if (self.peekTokenIs(token_type)) {
         self.nextToken();
     } else {
+        var buffer: [512]u8 = undefined;
+        const err = std.fmt.bufPrint(
+            &buffer,
+            "Expect {s}, got other instead",
+            .{
+                token_type.name(),
+                // self.cur_token,
+            },
+        ) catch unreachable;
+        self.errors.append(err) catch unreachable;
         return ParserError.ExpectPeek;
     }
 }
